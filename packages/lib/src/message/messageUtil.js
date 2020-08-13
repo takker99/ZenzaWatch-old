@@ -214,6 +214,7 @@ const BroadcastEmitter = messageUtil.BroadcastEmitter = (() => {
   };
 
   bcast.notifyClose = () => bcast.sendMessage({command: 'notifyClose'});
+  bcast.notifyOpen = playerId => bcast.sendMessage({command: 'notifyOpen', params: {playerId}});
 
   if (ZenzaWatch && ZenzaWatch.debug) {
     ZenzaWatch.debug.hello = bcast.hello;

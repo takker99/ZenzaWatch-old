@@ -18,17 +18,16 @@ import {ThreadLoader} from './loader/ThreadLoader';
 import {sleep} from '../packages/lib/src/infra/sleep';
 import {VideoSessionWorker} from '../packages/lib/src/nico/VideoSessionWorker';
 import {PlayerState} from './State';
-import {ClassListWrapper} from '../packages/lib/src/dom/ClassListMapper';
+import {ClassListWrapper, ClassList} from '../packages/lib/src/dom/ClassListWrapper';
 import {objUtil} from '../packages/lib/src/infra/objUtil';
 import {reg} from '../packages/lib/src/text/reg';
 import {bounce} from '../packages/lib/src/infra/bounce';
 import {MylistApiLoader} from '../packages/lib/src/nico/MylistApiLoader';
 import {ThumbInfoLoader} from '../packages/lib/src/nico/ThumbInfoLoader';
 import {WatchInfoCacheDb} from '../packages/lib/src/nico/WatchInfoCacheDb';
-import {css} from '../packages/lib/src/css/css';
+import {css, cssUtil} from '../packages/lib/src/css/css';
 
 //===BEGIN===
-//@require ClassListWrapper
 
 class PlayerConfig {
   static getInstance(config) {
@@ -211,13 +210,13 @@ class NicoVideoPlayerDialogView extends Emitter {
 
     const $container = this._$playerContainer = $dialog.find('.zenzaPlayerContainer');
     const container = $container[0];
-    const classList = this._classList = new ClassListWrapper(container);
+    const classList = this.classList = ClassList(container);
 
     container.addEventListener('click', e => {
       global.emitter.emitAsync('hideHover');
       if (
         e.target.classList.contains('touchWrapper') &&
-        config.getValue('enableTogglePlayOnClick') &&
+        config.props.enableTogglePlayOnClick &&
         !classList.contains('menuOpen')) {
         onCommand('togglePlay');
       }
@@ -231,7 +230,7 @@ class NicoVideoPlayerDialogView extends Emitter {
       this._onCommand(e.detail.command, e.detail.param);
     });
     container.addEventListener('focusin', e => {
-      let target = (e.path && e.path.length) ? e.path[0] : e.target;
+      const target = (e.path && e.path.length) ? e.path[0] : e.target;
       if (target.dataset.hasSubmenu) {
         classList.add('menuOpen');
       }
@@ -258,55 +257,55 @@ class NicoVideoPlayerDialogView extends Emitter {
         if (!e.target || e.target.id !== 'zenzaVideoPlayerDialog') {
           return;
         }
-        if (config.getValue('enableDblclickClose')) {
+        if (config.props.enableDblclickClose) {
           this.emit('command', 'close');
         }
       })
       .toggleClass('is-guest', !util.isLogin());
 
-    this._hoverMenu = new VideoHoverMenu({
+    this.hoverMenu = new VideoHoverMenu({
       playerContainer: container,
       playerState: state
     });
 
-    this._commentInput = new CommentInputPanel({
+    this.commentInput = new CommentInputPanel({
       $playerContainer: $container,
       playerConfig: config
     });
 
-    this._commentInput.on('post', (e, chat, cmd) =>
+    this.commentInput.on('post', (e, chat, cmd) =>
       this.emit('postChat', e, chat, cmd));
 
     let hasPlaying = false;
-    this._commentInput.on('focus', isAutoPause => {
+    this.commentInput.on('focus', isAutoPause => {
       hasPlaying = state.isPlaying;
       if (isAutoPause) {
         this.emit('command', 'pause');
       }
     });
-    this._commentInput.on('blur', isAutoPause => {
+    this.commentInput.on('blur', isAutoPause => {
       if (isAutoPause && hasPlaying && state.isOpen) {
         this.emit('command', 'play');
       }
     });
-    this._commentInput.on('esc', () => this._escBlockExpiredAt = Date.now() + 1000 * 2);
+    this.commentInput.on('esc', () => this._escBlockExpiredAt = Date.now() + 1000 * 2);
 
-    this._settingPanel = new SettingPanel({
-      $playerContainer: $container,
+    this.settingPanel = new SettingPanel({
+      $parent: $container,
       playerConfig: config,
       player: this._dialog
     });
-    this._settingPanel.on('command', onCommand);
+    this.settingPanel.on('command', onCommand);
 
     await sleep.idle();
-    this._videoControlBar = new VideoControlBar({
+    this.videoControlBar = new VideoControlBar({
       $playerContainer: $container,
       playerConfig: config,
       player: this._dialog,
       playerState: this._state,
       currentTimeGetter: this._currentTimeGetter
     });
-    this._videoControlBar.on('command', onCommand);
+    this.videoControlBar.on('command', onCommand);
 
     this._$errorMessageContainer = $container.find('.errorMessageContainer');
 
@@ -325,15 +324,15 @@ class NicoVideoPlayerDialogView extends Emitter {
     this.emitResolve('dom-ready');
   }
   _initializeVideoInfoPanel() {
-    if (this._videoInfoPanel) {
-      return this._videoInfoPanel;
+    if (this.videoInfoPanel) {
+      return this.videoInfoPanel;
     }
-    this._videoInfoPanel = new VideoInfoPanel({
+    this.videoInfoPanel = new VideoInfoPanel({
       dialog: this,
       node: this._$playerContainer
     });
-    this._videoInfoPanel.on('command', this._onCommand.bind(this));
-    return this._videoInfoPanel;
+    this.videoInfoPanel.on('command', this._onCommand.bind(this));
+    return this.videoInfoPanel;
   }
   _onCommand(command, param) {
     switch (command) {
@@ -352,12 +351,16 @@ class NicoVideoPlayerDialogView extends Emitter {
   }
   async _onPaste(e) {
     const isZen = !!e.target.closest('.zenzaVideoPlayerDialog');
-    window.console.log('onPaste', e.target, isZen);
+    window.console.log('onPaste', {e, isZen});
     if (!isZen && ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
       return;
     }
     let text;
-    try { text = await navigator.clipboard.readText(); } catch(e) { window.console.warn(e); }
+    try { text = await navigator.clipboard.readText(); }
+    catch(err) {
+      window.console.warn(err, navigator.clipboard);
+      text = e.clipboardData.getData('text/plain');
+    }
     if (!text) {
       return;
     }
@@ -390,29 +393,29 @@ class NicoVideoPlayerDialogView extends Emitter {
   }
   _initializeResponsive() {
     window.addEventListener('resize', _.debounce(this._updateResponsive.bind(this), 500));
-    this._varMapper = new VariablesMapper({config: this._playerConfig});
-    this._varMapper.on('update', () => this._updateResponsive());
+    this.varMapper = new VariablesMapper({config: this._playerConfig});
+    this.varMapper.on('update', () => this._updateResponsive());
   }
   _updateResponsive() {
     if (!this._state.isOpen) {
       return;
     }
-    let $container = this._$playerContainer;
-    let $header = $container.find('.zenzaWatchVideoHeaderPanel');
-    let config = this._playerConfig;
+    const $container = this._$playerContainer;
+    const [header] = $container.find('.zenzaWatchVideoHeaderPanel');
+    const config = this._playerConfig;
 
     // 画面の縦幅にシークバー分の余裕がある時は常時表示
     const update = () => {
-      const w = window.innerWidth, h = window.innerHeight;
+      const w = global.innerWidth, h = global.innerHeight;
       const vMargin = h - w * this._aspectRatio;
 
-      const controlBarMode = config.getValue('fullscreenControlBarMode');
+      const controlBarMode = config.props.fullscreenControlBarMode;
       if (controlBarMode === 'always-hide') {
         this.toggleClass('showVideoControlBar', false);
         return;
       }
-      let videoControlBarHeight = this._varMapper.videoControlBarHeight;
-      let showVideoHeaderPanel = vMargin >= videoControlBarHeight + $header[0].offsetHeight * 2;
+      const videoControlBarHeight = this.varMapper.videoControlBarHeight;
+      const showVideoHeaderPanel = vMargin >= videoControlBarHeight + header.offsetHeight * 2;
       let showVideoControlBar;
       switch (controlBarMode) {
         case 'always-show':
@@ -455,11 +458,11 @@ class NicoVideoPlayerDialogView extends Emitter {
     this._setThumbnail();
   }
   _onVideoInfoLoad(videoInfo) {
-    this._videoInfoPanel.update(videoInfo);
+    this.videoInfoPanel.update(videoInfo);
   }
   _onVideoInfoFail(videoInfo) {
     if (videoInfo) {
-      this._videoInfoPanel.update(videoInfo);
+      this.videoInfoPanel.update(videoInfo);
     }
   }
   _onVideoServerType(type, sessionInfo) {
@@ -551,7 +554,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     const table = this._getStateClassNameTable();
     const state = this._state;
     for (const [key, className] of table) {
-      this._classList.toggle(className, state[key]);
+      this.classList.toggle(className, state[key]);
     }
 
     if (this._state.isOpen) {
@@ -572,14 +575,13 @@ class NicoVideoPlayerDialogView extends Emitter {
     const screenMode = `zenzaScreenMode_${this._state.screenMode}`;
     if (!force && this._lastScreenMode === screenMode) { return; }
     this._lastScreenMode = screenMode;
-    const body = this._$body;
     const modes = this._getScreenModeClassNameTable();
     const isFull = util.fullscreen.now();
     Object.assign(document.body.dataset, {
       screenMode: this._state.screenMode,
       fullscreen: isFull ? 'yes' : 'no'
     });
-    modes.forEach(m => body.toggleClass(m, m === screenMode && !isFull));
+    modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull));
     this._updateScreenModeStyle();
   }
   _updateScreenModeStyle() {
@@ -616,25 +618,25 @@ class NicoVideoPlayerDialogView extends Emitter {
     util.StyleSwitcher.update({on, off});
   }
   show() {
-    this._$dialog.addClass('is-open');
+    ClassList(this._$dialog[0]).add('is-open');
     if (!Fullscreen.now()) {
-      document.body.classList.remove('fullscreen');
+      ClassList(document.body).remove('fullscreen');
     }
-    this._$body.addClass('showNicoVideoPlayerDialog');
+    this._$body.raf.addClass('showNicoVideoPlayerDialog');
     util.StyleSwitcher.update({on: 'style.zenza-open'});
     this._updateScreenModeStyle();
   }
   hide() {
-    this._$dialog.removeClass('is-open');
-    this._settingPanel.hide();
-    this._$body.removeClass('showNicoVideoPlayerDialog');
+    ClassList(this._$dialog[0]).remove('is-open');
+    this.settingPanel.hide();
+    this._$body.raf.removeClass('showNicoVideoPlayerDialog');
     util.StyleSwitcher.update({off: 'style.zenza-open, style.screenMode', on: 'link[href*="watch.css"]'});
     this._clearClass();
   }
   _clearClass() {
     const modes = this._getScreenModeClassNameTable().join(' ');
     this._lastScreenMode = '';
-    this._$body.removeClass(modes);
+    this._$body.raf.removeClass(modes);
   }
   _setThumbnail(thumbnail) {
     if (thumbnail) {
@@ -646,54 +648,46 @@ class NicoVideoPlayerDialogView extends Emitter {
   }
   focusToCommentInput() {
     // 即フォーカスだと入力欄に"C"が入ってしまうのを雑に対処
-    window.setTimeout(() => this._commentInput.focus(), 0);
+    window.setTimeout(() => this.commentInput.focus(), 0);
   }
   toggleSettingPanel() {
-    this._settingPanel.toggle();
+    this.settingPanel.toggle();
   }
   get$Container() {
     return this._$playerContainer;
   }
   css(key, val) {
-    this._$playerContainer.css(key, val);
+    this._$playerContainer.raf.css(key, val);
   }
   addClass(name) {
-    const cls = name.split(/\s+/).filter(cn => !this._classList.contains(cn));
-    if (!cls.length) { return; }
-    return this._classList.add(...cls);
+    return this.classList.add(name);
   }
   removeClass(name) {
-    const cls = name.split(/\s+/).filter(cn => this._classList.contains(cn));
-    if (!cls.length) { return; }
-    return this._classList.remove(...cls);
+    return this.classList.remove(name);
   }
   toggleClass(name, v) {
-    if (typeof v === 'boolean') {
-      return v ? this.addClass(name) : this.removeClass(name);
-    }
-    name.split(/\s+/).forEach(n => this._classList.toggle(n));
+    this.classList.toggle(name, v);
   }
   hasClass(name) {
-    const container = this._$playerContainer[0];
-    return container.classList.contains(name);
+    return this.classList.contains(name);
   }
   appendTab(name, title) {
-    return this._videoInfoPanel.appendTab(name, title);
+    return this.videoInfoPanel.appendTab(name, title);
   }
   selectTab(name) {
     this._playerConfig.props.videoInfoPanelTab = name;
     this._state.currentTab = name;
-    this._videoInfoPanel.selectTab(name);
+    this.videoInfoPanel.selectTab(name);
     global.emitter.emit('tabChange', name);
   }
   execCommand(command, param) {
     this.emit('command', command, param);
   }
   blinkTab(name) {
-    this._videoInfoPanel.blinkTab(name);
+    this.videoInfoPanel.blinkTab(name);
   }
   clearPanel() {
-    this._videoInfoPanel.clear();
+    this.videoInfoPanel.clear();
   }
 }
 
@@ -1264,10 +1258,6 @@ NicoVideoPlayerDialogView.__css__ = `
   `.trim();
 
 NicoVideoPlayerDialogView.__tpl__ = (`
-<!--
-
-
--->
     <div id="zenzaVideoPlayerDialog" class="zenzaVideoPlayerDialog zen-family zen-root">
       <div class="zenzaVideoPlayerDialogInner">
         <div class="menuContainer"></div>
@@ -1279,10 +1269,6 @@ NicoVideoPlayerDialogView.__tpl__ = (`
         </div>
       </div>
     </div>
-<!--
-
-
--->
   `).trim();
 /**
  * TODO: 分割 まにあわなくなっても知らんぞー
@@ -1465,10 +1451,10 @@ class NicoVideoPlayerDialog extends Emitter {
         break;
       case 'seek':
       case 'seekTo':
-        this.currentTime=param * 1;
+        this.currentTime = param * 1;
         break;
       case 'seekBy':
-        this.currentTime=this.currentTime + param * 1;
+        this.currentTime = this.currentTime + param * 1;
         break;
       case 'seekPrevFrame':
       case 'seekNextFrame':
@@ -1476,10 +1462,10 @@ class NicoVideoPlayerDialog extends Emitter {
         this.execCommand('seekBy', command === 'seekNextFrame' ? 1/60 : -1/60);
         break;
       case 'seekRelativePercent': {
-        let dur = this._videoInfo.duration;
-        let mv = Math.abs(param.movePerX) > 10 ?
+        const dur = this._videoInfo.duration;
+        const mv = Math.abs(param.movePerX) > 10 ?
           (param.movePerX / 2) : (param.movePerX / 8);
-        let pos = this.currentTime + (mv * dur / 100);
+        const pos = this.currentTime + (mv * dur / 100);
         this.currentTime=Math.min(Math.max(0, pos), dur);
         break;
       }
@@ -1922,7 +1908,7 @@ class NicoVideoPlayerDialog extends Emitter {
     global.emitter.emit('commentChange');
   }
   _onCommentFilterChange(filter) {
-    let config = this._playerConfig;
+    const config = this._playerConfig;
     config.setValue('enableFilter', filter.isEnable);
     config.setValue('wordFilter', filter.wordFilterList);
     config.setValue('userIdFilter', filter.userIdFilterList);
@@ -2032,7 +2018,7 @@ class NicoVideoPlayerDialog extends Emitter {
     if (!this._nicoVideoPlayer) {
       return 0;
     }
-    let ct = this._nicoVideoPlayer.currentTime * 1;
+    const ct = this._nicoVideoPlayer.currentTime * 1;
     if (!this._state.isError && ct > 0) {
       this._lastCurrentTime = ct;
     }
@@ -2048,14 +2034,14 @@ class NicoVideoPlayerDialog extends Emitter {
   }
   get id() { return this._id;}
   get isLastOpenedPlayer() {
-    return this.getId() === this._playerConfig.getValue('lastPlayerId', true);
+    return this.id === this._playerConfig.props.lastPlayerId;
   }
   refreshLastPlayerId() {
     if (this.isLastOpenedPlayer) {
       return;
     }
-    this._playerConfig.setValue('lastPlayerId', '');
-    this._playerConfig.setValue('lastPlayerId', this.getId());
+    this._playerConfig.props.lastPlayerId = '';
+    this._playerConfig.props.lastPlayerId = this.id;
   }
   async _onVideoInfoLoaderLoad(requestId, videoInfoData) {
     console.log('VideoInfoLoader.load!', requestId, this._watchId, videoInfoData);
@@ -2275,7 +2261,7 @@ class NicoVideoPlayerDialog extends Emitter {
       return;
     }
     window.console.timeEnd('動画選択から再生可能までの時間 watchId=' + this._watchId);
-    this._playerConfig.setValue('lastWatchId', this._watchId);
+    this._playerConfig.props.lastWatchId = this._watchId;
     WatchInfoCacheDb.put(this._watchId, {watchCount: 1});
 
     if (this._videoWatchOptions.isPlaylistStartRequest) {
@@ -2443,7 +2429,7 @@ class NicoVideoPlayerDialog extends Emitter {
       this._playlist.toggleEnable(false);
     }
 
-    let isAutoCloseFullScreen =
+    const isAutoCloseFullScreen =
       this._videoWatchOptions.hasKey('autoCloseFullScreen') ?
         this._videoWatchOptions.isAutoCloseFullScreen :
         this._playerConfig.getValue('autoCloseFullScreen');
@@ -2575,8 +2561,8 @@ class NicoVideoPlayerDialog extends Emitter {
   get isPlaying() {
     return this._state.isPlaying;
   }
-  get isPaused() {
-    return this._nicoVideoPlayer ? this._nicoVideoPlayer.isPaused : true;
+  get paused() {
+    return this._nicoVideoPlayer ? this._nicoVideoPlayer.paused : true;
   }
   togglePlay() {
     if (!this._state.isError && this._nicoVideoPlayer) {
@@ -3568,7 +3554,8 @@ class VariablesMapper {
     return Object.keys(state).some(key => state[key] !== nextState[key]);
   }
 
-  setVar(key, value) { this.element.style.setProperty(key, value); }
+  setVar(key, value) {
+    cssUtil.setProps([this.element, key, value]); }
 
   update() {
     const state = this.state;

@@ -32,34 +32,42 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.4.14
+// @version        2.4.25
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
 // ==/UserScript==
 /* eslint-disable */
+
 const AntiPrototypeJs = function() {
-	if (this.promise || !window.Prototype || window.PureArray) {
+	if (this.promise !== null || !window.Prototype || window.PureArray) {
 		return this.promise || Promise.resolve(window.PureArray || window.Array);
 	}
 	if (document.getElementsByClassName.toString().indexOf('B,A') >= 0) {
 		console.info('%cI don\'t like prototype.js 1.5.x', 'font-family: "Arial Black";');
 		delete document.getElementsByClassName;
 	}
+	const waitForDom = new Promise(resolve => {
+		if (['interactive', 'complete'].includes(document.readyState)) {
+			return resolve();
+		}
+		document.addEventListener('DOMContentLoaded', resolve, {once: true});
+	});
 	const f = document.createElement('iframe');
-	f.srcdoc = '<html><title>ここだけ時間が10年遅れてるスレ</title></html>';
-	f.id = 'prototype';
-	f.loading = 'eager';
-	Object.assign(f.style, { position: 'absolute', left: '-100vw', top: '-100vh' });
-	return this.promise = new Promise(res => {
-		f.onload = res;
-		document.documentElement.append(f);
-	}).then(() => {
-		window.PureArray = f.contentWindow.Array;
-		delete window.Array.prototype.toJSON;
-		delete window.String.prototype.toJSON;
-		f.remove();
-		return Promise.resolve(window.PureArray);
-	}).catch(err => console.error(err));
+	return this.promise = waitForDom
+		.then(() => new Promise(res => {
+			f.srcdoc = '<html><title>ここだけ時間が10年遅れてるスレ</title></html>';
+			f.id = 'prototype';
+			f.loading = 'eager';
+			Object.assign(f.style, { position: 'absolute', left: '-100vw', top: '-100vh' });
+			f.onload = res;
+			([...document.querySelectorAll('body')].reverse()[0]).append(f);
+		})).then(() => {
+			window.PureArray = f.contentWindow.Array;
+			delete window.Array.prototype.toJSON;
+			delete window.String.prototype.toJSON;
+			f.remove();
+			return Promise.resolve(window.PureArray);
+		}).catch(err => console.error(err));
 }.bind({promise: null});
 AntiPrototypeJs();
 (() => {
@@ -75,29 +83,41 @@ AntiPrototypeJs();
 
 (function (window) {
   const self = window;
+  const document = window.document;
   'use strict';
   const PRODUCT = 'ZenzaWatch';
 // 公式プレイヤーがurlを書き換えてしまうので読み込んでおく
   const START_PAGE_QUERY = (location.search ? location.search.substring(1) : '');
-  const monkey = (PRODUCT, START_PAGE_QUERY) /*** (｀・ω・´)9m ***/ => {
+  const monkey = async (PRODUCT, START_PAGE_QUERY) /*** (｀・ω・´)9m ***/ => {
     const Array = window.PureArray ? window.PureArray : window.Array;
     let console = window.console;
     let $ = window.ZenzaJQuery || window.jQuery, _ = window.ZenzaLib ? window.ZenzaLib._ : window._;
     let TOKEN = 'r:' + (Math.random());
     let CONFIG = null;
+    const NICORU = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAGh0lEQVRIS3VWeWxUxxn/zbxjvWuvvV4vXp9g43OddTB2EYEWnEuKgl3USqRHIpRIbVS7KapUmSbUIUpBBIjdtGpKHan9p0IkkQhNGtlUFaWFkGIi4WJq8BqMbQ4fuz7WV3bt3fdmXjWza8uozZOe3ryZb77fd/zm+4bgfx8VgCmmczN21HocoefiLFYfnI3VzBtBu5jP0HKWcjJtvbpiuzgd9Z6emL/076Sa1b0raska/WJMATBgp6/MM9o+MjO1y7QWV0W2Fmly/MVdY3VOJU4UZ607Ozhd0AJ8FgCgAOAALCG0AiC+4uUObXOT13mvYyQcFuv8t3sL2PbKdJrr0qnTpkj5xRizJubivHtgge87OSoU0mK3G6HFDc1R49p7SUMFgLUCIIRYul59yKENHQxGomj/fr6xd0e2lu3RAUIBzgEujUqYQhNbJ6fjOHlp0mj5YEzLSXUgapQcXoj3vZH0hAkpGTcbrWvKtA90BCMRs6ullO7akkW5YWEuwqSzKTpBio0mHQfiJgfnFuw2CqJSnL06wxva7vCc1FR1dqmyOcZ7hCdq0oOnfcXu6/0j4Sl0tpTyhq3rqBU3cerSFE6cC8KhEzzzqAs/3ZUPm41iaGwJv+oag6YAlBLs/2Yh8nId6Oqe5I3td2ixex1GwpuqgL8HJECZp7xzcPp2Q9v38o2WbxVq3OQyQ8c+foDXz0zIUHxnSzr++KMyONNVdPfPY/ubA6uJvnm8GlXr7TJ07Z+MGfs/HNPKPOVdg9O3G0luxpO104vXegw+y4MnNlNvlgZmchBQvNM5iv0fjktFP9jpwm9eKkFaqoqrtxaw5Y0AqrwU/SGOW21+lBc4pFwobCDnlWtco5nU49xcR/y5/rduTNw48O7eAuMnjfkaMxgoIbAsgl93jqIlCfByvQvvvPgwQE2+gt4xhoG2alQU2mEaFlSd4nedY8a+k6OaP9d/lFRkl1y+NTm07eqRKlZX5lRYjIOKXFoEh8/cx5sfB6VljZuceH9fuQzRlf55bFsTov63q+FbnwSwUfQMLrKvtfYrFdkl3cSl50fn4mP28RM1Vm6WTpgJECJYaOHcf+Zxvm8WCgX8hWnYs9UDTSeYmInj054wrCS7dte54XbqYJxBUalYt/Je6RW6l0SSra+X6PjrgWo4UxVwJgASfCeEgHHhDaAKMnMLMjvCAvGKheSXi7EFUAVYjDA8e7QP/xqKyyNjPVVpw6c/98ORokpuCwCx73zfPL4YXJTeVBWmoqE2CwolmF00cerzEJbiDAYDvrvNg5I8OxiDXI8um9j99g2cH4iBKMQTYda0I/RejZXt0gmXIbJkDg59dA+//CQkvXnpGxno+GEZUlIohsdjKPnZ9VWanjtQjqc3uWEaDKpGMDkXt7xNvUJ3lJS6vZfvhEPbAm3VrHK9Q3mIRV2jaPkgQdOWZz04+nwxVBvFg4llbGntQ1Ya0B/kuPB6Ber9GassGrgfZb79fUqp29tNavK9b/WOhQ6c+nGR8fzjXs2McZlU4cHac9D8pAut3y6CQ1cwMrWMHYcCyEkDhsMc/2ytwOPVSQAbxfsXQsYLv7+r1eR7jxKfZ0NtYPp+z/YSjf+ttZqmrcnDkT/fx8EziRCJx5+nSQovxS0MTsqWIZ9//KICTzyaATALX8Y4njnSxy8PGdTnWV8nS4XPm9oZCEUaTu/baOzZ6dWMZROaQvH5wByO/WUcMcPEcpzDYFx6JkB0lUBXKSrzHHhtdyHysjQQjeKjS1PGc+8Oaz5valcgFGmUAFl6ViVR5gLTSwz9xx/hvo3p1Fw2ZagiMY54XNQmskpfsUcCEQJ7CpHGKDYFgeEFXvXqTeqxK7CYyzcTnxlYLddFmY6mu7PRDkUhZuD4I7Rsg1NW1ITF4lxQIHk+Em1EeJM4BtBUDN5b5L5Xb3LGLLUo09F8dza6tlzLNseK3eqhkbB5UFh4/rVyo97v0hSdyNhaPEHdxAG0QETDUQhY3MLFG3PGU8duy35a7FYPj4TNhxqO3LPSMjdmak3jC0bHMgNe3uniL9bnsMoCB013UKqpiTZmmNxaiHI+MBrlf7oYVP7w2RxNUYC8dK15eNb4vy1zBUQ2/dw03edKZe2BENuV4AnBC485UZpjk393gjGcuiIuA4mS4vMqZ+ciSsvEl/GvbPqrlFtpoWLisQ1abYxbe649MJ8AsAmAvLYAWAJwfXOBesGmkNNX7hlfeW35LyB037N9NspNAAAAAElFTkSuQmCC';
     const dll = {};
     const util = {};
-    let {workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
+    let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = encodeURIComponent(START_PAGE_QUERY);
-    var VER = '2.4.14';
+    var VER = '2.4.25';
     const ENV = 'DEV';
 
 
     console.log(
-      `%c${PRODUCT}@${ENV} v${VER}`,
+      `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
       'font-family: Chalkduster; font-size: 200%; background: #039393; color: #ffc; padding: 8px; text-shadow: 2px 2px #888;',
-      '(ﾟ∀ﾟ) ｾﾞﾝｻﾞ!'
+      '',
+      'font-family: "Chalkboard SE", Chalkduster,HeadLineA; font-size: 24px;',
+      'display: inline-block; font-size: 24px; color: transparent; background-repeat: no-repeat; background-position: center; background-size: contain;' +
+      `background-image: url(${NICORU});`,
+      'line-height: 1.25; font-weight: bold; '
     );
+    console.nicoru =
+      console.log.bind(console,
+        '%c田',
+        'display: inline-block; font-size: 120%; color: transparent; background-repeat: no-repeat; background-position: center; background-size: contain;' +
+        `background-image: url(${NICORU})`
+        );
 
 const StorageWriter = (() => {
 	const func = function(self) {
@@ -191,12 +211,12 @@ const Observable = (() => {
 		}
 		filter(func) {
 			const _func = this._filterFunc;
-			this._filterFunc = _func ? func : arg => func(_func(arg));
+			this._filterFunc = _func ? (arg => _func(arg) && func(arg)) : func;
 			return this;
 		}
 		map(func) {
 			const _func = this._mapFunc;
-			this._mapFunc = _func ? func : arg => func(_func(arg));
+			this._mapFunc = _func ? arg => func(_func(arg)) : func;
 			return this;
 		}
 		get closed() {
@@ -379,9 +399,12 @@ const bounce = {
 	raf(func) {
 		let reqId = null;
 		let lastArgs = null;
+		let promise = new PromiseHandler();
 		const callback = () => {
-			func(...lastArgs);
+			const lastResult = func(...lastArgs);
+			promise.resolve({lastResult, lastArgs});
 			reqId = lastArgs = null;
+			promise = new PromiseHandler();
 		};
 		const result =  (...args) => {
 			if (reqId) {
@@ -389,6 +412,7 @@ const bounce = {
 			}
 			lastArgs = args;
 			reqId = requestAnimationFrame(callback);
+			return promise;
 		};
 		result[this.origin] = func;
 		return result;
@@ -396,13 +420,15 @@ const bounce = {
 	idle(func, time) {
 		let reqId = null;
 		let lastArgs = null;
+		let promise = new PromiseHandler();
 		const [caller, canceller] =
 			(time === undefined && window.requestIdleCallback) ?
 			[window.requestIdleCallback, window.cancelIdleCallback] : [window.setTimeout, window.clearTimeout];
 		const callback = () => {
-			reqId = null;
-			func(...lastArgs);
-			lastArgs = null;
+			const lastResult = func(...lastArgs);
+			promise.resolve({lastResult, lastArgs});
+			reqId = lastArgs = null;
+			promise = new PromiseHandler();
 		};
 		const result = (...args) => {
 			if (reqId) {
@@ -410,6 +436,7 @@ const bounce = {
 			}
 			lastArgs = args;
 			reqId = caller(callback, time);
+			return promise;
 		};
 		result[this.origin] = func;
 		return result;
@@ -418,12 +445,58 @@ const bounce = {
 		return this.idle(func, time);
 	}
 };
+const throttle = (func, interval) => {
+	let lastTime = 0;
+	let timer;
+	let promise = new PromiseHandler();
+	const result = (...args) => {
+		const now = performance.now();
+		const timeDiff = now - lastTime;
+		if (timeDiff < interval) {
+			if (!timer) {
+				timer = setTimeout(() => {
+					lastTime = performance.now();
+					timer = null;
+					const lastResult = func(...args);
+					promise.resolve({lastResult, lastArgs: args});
+					promise = new PromiseHandler();
+				}, Math.max(interval - timeDiff, 0));
+			}
+			return;
+		}
+		if (timer) {
+			timer = clearTimeout(timer);
+		}
+		lastTime = now;
+		const lastResult = func(...args);
+		promise.resolve({lastResult, lastArgs: args});
+		promise = new PromiseHandler();
+};
+	result.cancel = () => {
+		if (timer) {
+			timer = clearTimeout(timer);
+		}
+		promise.resolve({lastResult: null, lastArgs: null});
+		promise = new PromiseHandler();
+	};
+	return result;
+};
 class DataStorage {
 	static create(defaultData, options = {}) {
 		return new DataStorage(defaultData, options);
 	}
+	static clone(dataStorage) {
+		const options = {
+			prefix:  dataStorage.prefix,
+			storage: dataStorage.storage,
+			ignoreExportKeys: dataStorage.options.ignoreExportKeys,
+			readonly: dataStorage.readonly
+		};
+		return DataStorage.create(dataStorage.default, options);
+	}
 	constructor(defaultData, options = {}) {
-		this._default = defaultData;
+		this.options = options;
+		this.default = defaultData;
 		this._data = Object.assign({}, defaultData);
 		this.prefix = `${options.prefix || 'DATA'}_`;
 		this.storage = options.storage || localStorage;
@@ -433,8 +506,10 @@ class DataStorage {
 		this._changed = new Map();
 		this._onChange = bounce.time(this._onChange.bind(this));
 		objUtil.bridge(this, new Emitter());
-		this.restore();
-		this.props = this._makeProps(defaultData);
+		this.restore().then(() => {
+			this.props = this._makeProps(defaultData);
+			this.emitResolve('restore');
+		});
 		this.logger = (self || window).console;
 		this.consoleSubscriber = {
 			next: (v, ...args) => this.logger.log('next', v, ...args),
@@ -479,9 +554,9 @@ class DataStorage {
 	offkey(key, callback) {
 		this.off(`update-${key}`, callback);
 	}
-	restore(storage) {
+	async restore(storage) {
 		storage = storage || this.storage;
-		Object.keys(this._default).forEach(key => {
+		Object.keys(this.default).forEach(key => {
 			const storageKey = this.getStorageKey(key);
 			if (storage.hasOwnProperty(storageKey) || storage[storageKey] !== undefined) {
 				try {
@@ -490,7 +565,7 @@ class DataStorage {
 					window.console.error('config parse error key:"%s" value:"%s" ', key, storage[storageKey], e);
 				}
 			} else {
-				this._data[key] = this._default[key];
+				this._data[key] = this.default[key];
 			}
 		});
 	}
@@ -500,7 +575,7 @@ class DataStorage {
 	getStorageKey(key) {
 		return `${this.prefix}${key}`;
 	}
-	refresh(key, storage) {
+	async refresh(key, storage) {
 		storage = storage || this.storage;
 		key = this.getNativeKey(key);
 		const storageKey = this.getStorageKey(key);
@@ -520,6 +595,12 @@ class DataStorage {
 		key = this.getNativeKey(key);
 		return this._data[key];
 	}
+	deleteValue(key) {
+		key = this.getNativeKey(key);
+		const storageKey = this.getStorageKey(key);
+		this.storage.removeItem(storageKey);
+		this._data[key] = this.default[key];
+	}
 	setValue(key, value) {
 		const _key = key;
 		key = this.getNativeKey(key);
@@ -528,9 +609,7 @@ class DataStorage {
 		}
 		const storageKey = this.getStorageKey(key);
 		const storage = this.storage;
-		if (!this.readonly && storage[StorageWriter.writer]) {
-			storage[StorageWriter.writer](storageKey, value);
-		} else if (!this.readonly) {
+		if (!this.readonly) {
 			try {
 				storage[storageKey] = JSON.stringify(value);
 			} catch (e) {
@@ -551,7 +630,7 @@ class DataStorage {
 	}
 	export(isAll = false) {
 		const result = {};
-		const _default = this._default;
+		const _default = this.default;
 		Object.keys(this.props)
 			.filter(key => isAll || (_default[key] !== this._data[key]))
 			.forEach(key => result[key] = this.getValue(key));
@@ -576,14 +655,14 @@ class DataStorage {
 	clear() {
 		this.silently = true;
 		const storage = this.storage;
-		Object.keys(this._default)
+		Object.keys(this.default)
 			.filter(key => !this._ignoreExportKeys.includes(key)).forEach(key => {
 				const storageKey = this.getStorageKey(key);
 				try {
 					if (storage.hasOwnProperty(storageKey) || storage[storageKey] !== undefined) {
 						delete storage[storageKey];
 					}
-					this._data[key] = this._default[key];
+					this._data[key] = this.default[key];
 				} catch (e) {}
 		});
 		this.silently = false;
@@ -655,6 +734,59 @@ class DataStorage {
 	unwatch() {
 		this.consoleSubscription && this.consoleSubscription.unsubscribe();
 		this.consoleSubscription = null;
+	}
+}
+class KVSDataStorage extends DataStorage {
+	constructor(defaultData, options = {}) {
+		super(defaultData, options);
+	}
+	getStorageKey(key) {
+		return key;
+	}
+	async restore(storage) {
+		storage = storage || this.storage;
+		const dbs = this.options.dbStorage.export();
+		for (const key of Object.keys(dbs)) {
+			const value = dbs[key];
+			this.storage.set(key, value);
+			this.dbStorage.deleteValue(key);
+		}
+		for (const key of Object.keys(this.default)) {
+			const storageKey = key;
+			const value = await this.storage.get(storageKey);
+			if (value !== undefined) {
+					this._data[key] = value;
+			} else {
+				this._data[key] = this.default[key];
+			}
+		}
+	}
+	async refresh(key, storage) {
+		storage = storage || this.storage;
+		key = this.getNativeKey(key);
+		const storageKey = key;
+		const value = await this.storage.get(storageKey);
+		if (value !== undefined) {
+			this._data[key] = value;
+		}
+		return this._data[key];
+	}
+	setValue(key, value) {
+		const _key = key;
+		key = this.getNativeKey(key);
+		if (this._data[key] === value || arguments.length < 2 || value === undefined) {
+			return;
+		}
+		const storageKey = key;
+		const storage = this.storage;
+		if (!this.readonly) {
+			storage.set(storageKey, value);
+		}
+		this._data[key] = value;
+		if (!this.silently) {
+			this._changed.set(_key, value);
+			this._onChange();
+		}
 	}
 }
 const Config = (() => {
@@ -798,7 +930,7 @@ const Config = (() => {
 		DEFAULT_CONFIG.enableVideoSession = true;
 		DEFAULT_CONFIG['uaa.enable'] = false;
 	}
-	return new DataStorage(
+	return DataStorage.create(
 		DEFAULT_CONFIG,
 		{
 			prefix: PRODUCT,
@@ -810,7 +942,9 @@ const Config = (() => {
 })();
 Config.exportConfig = () => Config.export();
 Config.importConfig = v => Config.import(v);
+Config.clearConfig = () => Config.clear();
 const NaviConfig = Config;
+await Config.promise('restore');
 const uQuery = (() => {
 	const endMap = new WeakMap();
 	const elementEventsMap = new WeakMap();
@@ -898,6 +1032,44 @@ const uQuery = (() => {
 	const isNodeList = e => {
 		return e instanceof NodeList || (e && e[Symbol.toStringTag] === 'NodeList');
 	};
+	class RafCaller {
+		constructor(elm, methods = []) {
+			this.elm = elm;
+			methods.forEach(method => {
+				const task = elm[method].bind(elm);
+				task._name = method;
+				this[method] = (...args) => {
+					this.enqueue(task, ...args);
+					return elm;
+				};
+			});
+		}
+		get promise() {
+			return this.constructor.promise;
+		}
+		enqueue(task, ...args) {
+			this.constructor.taskList.push([task, ...args]);
+			this.constructor.exec();
+		}
+		cancel() {
+			this.constructor.taskList.length = 0;
+		}
+	}
+	RafCaller.promise = new PromiseHandler();
+	RafCaller.taskList = [];
+	RafCaller.exec = bounce.raf(function() {
+		const taskList = this.taskList.concat();
+		this.taskList.length = 0;
+		for (const [task, ...args] of taskList) {
+			try {
+				task(...args);
+			} catch (err) {
+				console.warn('RafCaller task fail', {task, args});
+			}
+		}
+		this.promise.resolve();
+		this.promise = new PromiseHandler();
+	}.bind(RafCaller));
 	class $Array extends Array {
 		get [Symbol.toStringTag]() {
 			return '$Array';
@@ -931,6 +1103,16 @@ const uQuery = (() => {
 			} else {
 				this[0] = elm;
 			}
+		}
+		get raf() {
+			if (!this._raf) {
+				this._raf = new RafCaller(this, [
+					'addClass','removeClass','toggleClass','css','setAttribute','attr','data','prop',
+					'val','focus','blur','insert','append','appendChild','prepend','after','before',
+					'text','appendTo','prependTo','remove','show','hide'
+				]);
+			}
+			return this._raf;
 		}
 		get htmls() {
 			return this.filter(isHTMLElement);
@@ -1246,7 +1428,7 @@ const uQuery = (() => {
 		val(v = undef) {
 			const htmls = this.getHtmls();
 			for (const elm of htmls) {
-				if (!elm.hasAttribute('value')) {
+				if (!('value' in elm)) {
 					continue;
 				}
 				if (v === undef) {
@@ -1638,14 +1820,16 @@ CONSTANT.SCROLLBAR_CSS = `
 		display: none;
 	}
 `.trim();
-const NICORU = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAGh0lEQVRIS3VWeWxUxxn/zbxjvWuvvV4vXp9g43OddTB2EYEWnEuKgl3USqRHIpRIbVS7KapUmSbUIUpBBIjdtGpKHan9p0IkkQhNGtlUFaWFkGIi4WJq8BqMbQ4fuz7WV3bt3fdmXjWza8uozZOe3ryZb77fd/zm+4bgfx8VgCmmczN21HocoefiLFYfnI3VzBtBu5jP0HKWcjJtvbpiuzgd9Z6emL/076Sa1b0raska/WJMATBgp6/MM9o+MjO1y7QWV0W2Fmly/MVdY3VOJU4UZ607Ozhd0AJ8FgCgAOAALCG0AiC+4uUObXOT13mvYyQcFuv8t3sL2PbKdJrr0qnTpkj5xRizJubivHtgge87OSoU0mK3G6HFDc1R49p7SUMFgLUCIIRYul59yKENHQxGomj/fr6xd0e2lu3RAUIBzgEujUqYQhNbJ6fjOHlp0mj5YEzLSXUgapQcXoj3vZH0hAkpGTcbrWvKtA90BCMRs6ullO7akkW5YWEuwqSzKTpBio0mHQfiJgfnFuw2CqJSnL06wxva7vCc1FR1dqmyOcZ7hCdq0oOnfcXu6/0j4Sl0tpTyhq3rqBU3cerSFE6cC8KhEzzzqAs/3ZUPm41iaGwJv+oag6YAlBLs/2Yh8nId6Oqe5I3td2ixex1GwpuqgL8HJECZp7xzcPp2Q9v38o2WbxVq3OQyQ8c+foDXz0zIUHxnSzr++KMyONNVdPfPY/ubA6uJvnm8GlXr7TJ07Z+MGfs/HNPKPOVdg9O3G0luxpO104vXegw+y4MnNlNvlgZmchBQvNM5iv0fjktFP9jpwm9eKkFaqoqrtxaw5Y0AqrwU/SGOW21+lBc4pFwobCDnlWtco5nU49xcR/y5/rduTNw48O7eAuMnjfkaMxgoIbAsgl93jqIlCfByvQvvvPgwQE2+gt4xhoG2alQU2mEaFlSd4nedY8a+k6OaP9d/lFRkl1y+NTm07eqRKlZX5lRYjIOKXFoEh8/cx5sfB6VljZuceH9fuQzRlf55bFsTov63q+FbnwSwUfQMLrKvtfYrFdkl3cSl50fn4mP28RM1Vm6WTpgJECJYaOHcf+Zxvm8WCgX8hWnYs9UDTSeYmInj054wrCS7dte54XbqYJxBUalYt/Je6RW6l0SSra+X6PjrgWo4UxVwJgASfCeEgHHhDaAKMnMLMjvCAvGKheSXi7EFUAVYjDA8e7QP/xqKyyNjPVVpw6c/98ORokpuCwCx73zfPL4YXJTeVBWmoqE2CwolmF00cerzEJbiDAYDvrvNg5I8OxiDXI8um9j99g2cH4iBKMQTYda0I/RejZXt0gmXIbJkDg59dA+//CQkvXnpGxno+GEZUlIohsdjKPnZ9VWanjtQjqc3uWEaDKpGMDkXt7xNvUJ3lJS6vZfvhEPbAm3VrHK9Q3mIRV2jaPkgQdOWZz04+nwxVBvFg4llbGntQ1Ya0B/kuPB6Ber9GassGrgfZb79fUqp29tNavK9b/WOhQ6c+nGR8fzjXs2McZlU4cHac9D8pAut3y6CQ1cwMrWMHYcCyEkDhsMc/2ytwOPVSQAbxfsXQsYLv7+r1eR7jxKfZ0NtYPp+z/YSjf+ttZqmrcnDkT/fx8EziRCJx5+nSQovxS0MTsqWIZ9//KICTzyaATALX8Y4njnSxy8PGdTnWV8nS4XPm9oZCEUaTu/baOzZ6dWMZROaQvH5wByO/WUcMcPEcpzDYFx6JkB0lUBXKSrzHHhtdyHysjQQjeKjS1PGc+8Oaz5valcgFGmUAFl6ViVR5gLTSwz9xx/hvo3p1Fw2ZagiMY54XNQmskpfsUcCEQJ7CpHGKDYFgeEFXvXqTeqxK7CYyzcTnxlYLddFmY6mu7PRDkUhZuD4I7Rsg1NW1ITF4lxQIHk+Em1EeJM4BtBUDN5b5L5Xb3LGLLUo09F8dza6tlzLNseK3eqhkbB5UFh4/rVyo97v0hSdyNhaPEHdxAG0QETDUQhY3MLFG3PGU8duy35a7FYPj4TNhxqO3LPSMjdmak3jC0bHMgNe3uniL9bnsMoCB013UKqpiTZmmNxaiHI+MBrlf7oYVP7w2RxNUYC8dK15eNb4vy1zBUQ2/dw03edKZe2BENuV4AnBC485UZpjk393gjGcuiIuA4mS4vMqZ+ciSsvEl/GvbPqrlFtpoWLisQ1abYxbe649MJ8AsAmAvLYAWAJwfXOBesGmkNNX7hlfeW35LyB037N9NspNAAAAAElFTkSuQmCC';
 const global = {
   emitter, debug,
   external: ZenzaWatch.external, PRODUCT, TOKEN, CONSTANT,
   notify: msg => ZenzaWatch.external.execCommand('notify', msg),
   alert: msg => ZenzaWatch.external.execCommand('alert', msg),
   config: Config,
-  api: ZenzaWatch.api
+  api: ZenzaWatch.api,
+  innerWidth: window.innerWidth,
+  innerHeight: window.innerHeight,
+  NICORU
 };
 const reg = (() => {
 	const $ = Symbol('$');
@@ -1830,68 +2014,80 @@ for (const k of Object.keys(window.console)) {
 	if (typeof window.console[k] !== 'function') {continue;}
 	dummyConsole[k] = _.noop;
 }
-['assert', 'error', 'warn'].forEach(k =>
+['assert', 'error', 'warn', 'nicoru'].forEach(k =>
 	dummyConsole[k] = window.console[k].bind(window.console));
-console = Config.getValue('debug') ? window.console : dummyConsole;
+console = Config.props.debug ? window.console : dummyConsole;
 Config.onkey('debug', v => console = v ? window.console : dummyConsole);
-const css = {
-	addStyle: (styles, option, document = window.document) => {
-		const elm = document.createElement('style');
-		elm.type = 'text/css';
-		if (typeof option === 'string') {
-			elm.id = option;
-		} else if (option) {
-			Object.assign(elm, option);
-		}
-		elm.classList.add(PRODUCT);
-		elm.append(styles.toString());
-		(document.head || document.body || document.documentElement).append(elm);
-		elm.disabled = option && option.disabled;
-		elm.dataset.switch = elm.disabled ? 'off' : 'on';
-		return elm;
-	},
-	registerProps(...args) {
-		if (!CSS || !('registerProperty' in CSS)) {
-			return;
-		}
-		for (const definition of args) {
-			try {
-				(definition.window || window).CSS.registerProperty(definition);
-			} catch (err) { console.warn('CSS.registerProperty fail', definition, err); }
-		}
-	},
-	setProps(element, ...args) {
-		for (const {prop, value} of args) {
+const css = (() => {
+	const setPropsTask = [];
+	const applySetProps = bounce.raf(() => {
+		const tasks = setPropsTask.concat();
+		setPropsTask.length = 0;
+		for (const [element, prop, value] of tasks) {
 			try {
 				element.style.setProperty(prop, value);
-			} catch (err) { console.warn('element.style.setProperty fail', {prop, value}, element, err); }
+			} catch (err) {
+				console.warn('element.style.setProperty fail', {prop, value}, element, err);
+			}
 		}
-	},
-	addModule: async function(func, options = {}) {
-		if (!CSS || !('paintWorklet' in CSS) || this.set.has(func)) {
-			return;
-		}
-		this.set.add(func);
-		const src =
-		`(${func.toString()})(
-			this,
-			registerPaint,
-			${JSON.stringify(options.config || {}, null, 2)}
-			);`;
-		const blob = new Blob([src], {type: 'text/javascript'});
-		const url = URL.createObjectURL(blob);
-		await CSS.paintWorklet.addModule(url).then(() => URL.revokeObjectURL(url));
-		return true;
-	}.bind({set: new WeakSet}),
-	number:  value => CSS.number  ? CSS.number(value) : value,
-	s:       value => CSS.s       ? CSS.s(value) :  `${value}s`,
-	ms:      value => CSS.ms      ? CSS.ms(value) : `${value}ms`,
-	pt:      value => CSS.pt      ? CSS.pt(value) : `${value}pt`,
-	px:      value => CSS.px      ? CSS.px(value) : `${value}px`,
-	percent: value => CSS.percent ? CSS.percent(value) : `${value}%`,
-	vh:      value => CSS.vh      ? CSS.vh(value) : `${value}vh`,
-	vw:      value => CSS.vw      ? CSS.vw(value) : `${value}vw`,
-};
+	});
+	const css = {
+		addStyle: (styles, option, document = window.document) => {
+			const elm = document.createElement('style');
+			elm.type = 'text/css';
+			if (typeof option === 'string') {
+				elm.id = option;
+			} else if (option) {
+				Object.assign(elm, option);
+			}
+			elm.classList.add(global.PRODUCT);
+			elm.append(styles.toString());
+			(document.head || document.body || document.documentElement).append(elm);
+			elm.disabled = option && option.disabled;
+			elm.dataset.switch = elm.disabled ? 'off' : 'on';
+			return elm;
+		},
+		registerProps(...args) {
+			if (!CSS || !('registerProperty' in CSS)) {
+				return;
+			}
+			for (const definition of args) {
+				try {
+					(definition.window || window).CSS.registerProperty(definition);
+				} catch (err) { console.warn('CSS.registerProperty fail', definition, err); }
+			}
+		},
+		setProps(...tasks) {
+			setPropsTask.push(...tasks);
+			return setPropsTask.length ? applySetProps() : Promise.resolve();
+		},
+		addModule: async function(func, options = {}) {
+			if (!CSS || !('paintWorklet' in CSS) || this.set.has(func)) {
+				return;
+			}
+			this.set.add(func);
+			const src =
+			`(${func.toString()})(
+				this,
+				registerPaint,
+				${JSON.stringify(options.config || {}, null, 2)}
+				);`;
+			const blob = new Blob([src], {type: 'text/javascript'});
+			const url = URL.createObjectURL(blob);
+			await CSS.paintWorklet.addModule(url).then(() => URL.revokeObjectURL(url));
+			return true;
+		}.bind({set: new WeakSet}),
+		number:  value => CSS.number  ? CSS.number(value) : value,
+		s:       value => CSS.s       ? CSS.s(value) :  `${value}s`,
+		ms:      value => CSS.ms      ? CSS.ms(value) : `${value}ms`,
+		pt:      value => CSS.pt      ? CSS.pt(value) : `${value}pt`,
+		px:      value => CSS.px      ? CSS.px(value) : `${value}px`,
+		percent: value => CSS.percent ? CSS.percent(value) : `${value}%`,
+		vh:      value => CSS.vh      ? CSS.vh(value) : `${value}vh`,
+		vw:      value => CSS.vw      ? CSS.vw(value) : `${value}vw`,
+	};
+	return css;
+})();
 const cssUtil = css;
 Object.assign(util, css);
 const textUtil = {
@@ -2261,8 +2457,6 @@ const BroadcastEmitter = messageUtil.BroadcastEmitter = (() => {
 		const req = {id: PRODUCT, body: {command: 'message', params: body}, sessionId};
 		if (channel) {
 			channel.postMessage(req);
-		} else if (location.host === 'www.nicovideo.jp') {
-			Config.setValue('message', {body, sessionId});
 		} else if (location.host !== 'www.nicovideo.jp' &&
 			NicoVideoApi && NicoVideoApi.sendMessage) {
 			return NicoVideoApi.sendMessage(body, !!sessionId, sessionId);
@@ -3313,11 +3507,11 @@ class BaseViewComponent extends Emitter {
 	}
 	_initDom(params) {
 		const {parentNode, name, template, css: style, shadow} = params;
-		let tplId = `${PRODUCT}${name}Template`;
+		const tplId = `${PRODUCT}${name}Template`;
 		let tpl = BaseViewComponent[tplId];
 		if (!tpl) {
 			if (style) {
-				css.addStyle(style, `${name}Style`);
+				cssUtil.addStyle(style, `${name}Style`);
 			}
 			tpl = document.createElement('template');
 			tpl.innerHTML = template;
@@ -3337,7 +3531,7 @@ class BaseViewComponent extends Emitter {
 		}
 	}
 	_attachShadow({host, shadow, name, mode = 'open'}) {
-		let tplId = `${PRODUCT}${name}Shadow`;
+		const tplId = `${PRODUCT}${name}Shadow`;
 		let tpl = BaseViewComponent[tplId];
 		if (!tpl) {
 			tpl = document.createElement('template');
@@ -3360,7 +3554,7 @@ class BaseViewComponent extends Emitter {
 		const node = document.importNode(tpl.content, true);
 		const style = node.querySelector('style');
 		style.remove();
-		css.addStyle(style.innerHTML, `${name}Shadow`);
+		cssUtil.addStyle(style.innerHTML, `${name}Shadow`);
 		host.append(node);
 		this._shadow = this._shadowRoot = host.querySelector('.root');
 		this._isDummyShadow = true;
@@ -3410,18 +3604,24 @@ class BaseViewComponent extends Emitter {
 		));
 	}
 	toggleClass(className, v) {
-		(className || '').split(/\s+/).forEach(c => {
-			this._view.classList.toggle(c, v);
-			if (this._shadow) {
-				this._shadow.classList.toggle(c, this._view.classList.contains(c));
+		const vc = ClassList(this._view);
+		const sc = this._shadow ? ClassList(this._shadow) : null;
+		(className || '').trim().split(/\s+/).forEach(c => {
+			vc.toggle(c, v);
+			if (sc) {
+				sc.toggle(c, vc.contains(c));
 			}
 		});
 	}
 	addClass(name) {
-		this.toggleClass(name, true);
+		const names = name.trim().split(/[\s]+/);
+		ClassList(this._view).add(...names);
+		this._shadow && ClassList(this._shadow).add(...names);
 	}
 	removeClass(name) {
-		this.toggleClass(name, false);
+		const names = name.trim().split(/[\s]+/);
+		ClassList(this._view).remove(...names);
+		this._shadow && ClassList(this._shadow).remove(...names);
 	}
 }
 class StyleSwitcher {
@@ -3453,34 +3653,6 @@ class StyleSwitcher {
 	}
 }
 util.StyleSwitcher = StyleSwitcher;
-const dimport = Object.assign(url => {
-	if (dimport.map[url]) {
-		return dimport.map[url];
-	}
-	const now = Date.now();
-	const callbackName = `dimport_${now}`;
-	const loader = `
-		import * as module${now} from "${url}";
-		console.log('%cdynamic import from "${url}"',
-			'font-weight: bold; background: #333; color: #ff9; display: block; padding: 4px; width: 100%;');
-		window.${callbackName}(module${now});
-		`.trim();
-	window.console.time(`"${url}" import time`);
-	const p = new Promise(res => {
-		const s = document.createElement('script');
-		s.type = 'module';
-		s.append(document.createTextNode(loader));
-		s.dataset.import = url;
-		window[callbackName] = module => {
-			window.console.timeEnd(`"${url}" import time`);
-			res(module);
-			delete window[callbackName];
-		};
-		document.head.append(s);
-	});
-	dimport.map[url] = p;
-	return p;
-}, {map: {}});
 util.dimport = dimport;
 const VideoItemObserver = (() => {
 	let intersectionObserver;
@@ -3885,6 +4057,10 @@ const initCssProps = () => {
 	const TP = 'transparent';
 	const inherits = true;
 	cssUtil.registerProps(
+		{name: '--inner-width',
+			syntax: NUM, initialValue: 100,  inherits},
+		{name: '--inner-height',
+			syntax: NUM, initialValue: 100, inherits},
 		{name: '--zenza-ui-scale',
 			syntax: NUM, initialValue: 1,  inherits},
 		{name: '--zenza-control-bar-height',
@@ -3932,8 +4108,18 @@ const initCssProps = () => {
 		{name: '--enabled-button-color',
 			syntax: CL, initialValue: TP, inherits}
 	);
+	document.documentElement.style.setProperty('--inner-width', global.innerWidth);
+	document.documentElement.style.setProperty('--inner-height', global.innerHeight);
 };
 initCssProps();
+WindowResizeObserver.subscribe(({width, height}) => {
+  global.innerWidth  = width;
+  global.innerHeight = height;
+  cssUtil.setProps(
+    [document.documentElement, '--inner-width', width],
+    [document.documentElement, '--inner-height', height]
+  );
+});
 class BaseCommandElement extends HTMLElement {
 	static toAttributeName(camel) {
 		return 'data-' + camel.replace(/([A-Z])/g, s =>  '-' + s.toLowerCase());
@@ -7114,7 +7300,155 @@ class TagEditApi {
 	}
 }
 Object.assign(ZenzaWatch.api, {NicoSearchApiV2Loader});
-// global.api.StoryboardCacheDb = StoryboardCacheDb;
+/*
+* アニメーション基準用の時間ゲッターとしてはperformance.now()よりWeb Animations APIのほうが優れている。
+* ところでFirefoxはperformance.now()の精度を2msに落としてるのにWAAPIでマイクロ秒が取れちゃうけどいいの？
+*/
+class MediaTimeline {
+	constructor(options = {}) {
+		this.buffer = new (self.SharedArrayBuffer || ArrayBuffer)(Float32Array.BYTES_PER_ELEMENT * 100);
+		this.fview = new Float32Array(this.buffer);
+		this.iview = new Int32Array(this.buffer);
+		const span = document.createElement('span');
+		this.anime = span.animate ?
+			span.animate([], {duration: 3 * 24 * 60 * 60 * 1000}) :
+			{currentTime: 0, playbackRate: 1, paused: true};
+		this.isWAAvailable = !!span.animate;
+		this.interval = options.interval || 200;
+		this.onTimer = this.onTimer.bind(this);
+		this.onRaf = this.onRaf.bind(this);
+		this.eventMap = this.initEventMap();
+		if (options.media) {
+			this.attach(options.media);
+		}
+	}
+	initEventMap() {
+		const map = {
+			'pause': e => {
+				this.paused = true;
+				this.currentTime = this.media.currentTime;
+			},
+			'play': e => {
+				this.currentTime = this.media.currentTime;
+				this.paused = false;
+			},
+			'seeked': e => {
+				this.currentTime = this.media.currentTime;
+			},
+			'ratechange': e => {
+				this.playbackRate = this.media.playbackRate;
+				this.currentTime = this.media.currentTime;
+			}
+		};
+		return objUtil.toMap(map);
+	}
+	attach(media) {
+		if (this.media) {
+			this.detach();
+		}
+		this.media = media;
+		this.currentTime  = media.currentTime;
+		this.playbackRate = media.playbackRate;
+		this.duration     = media.duration;
+		this.paused       = media.paused;
+		this.timer = setInterval(this.onTimer, this.interval);
+		for (const [eventName, handler] of this.eventMap) {
+			media.addEventListener(eventName, handler, {passive: true});
+		}
+	}
+	detach() {
+		const media = this.media;
+		for (const [eventName, handler] of this.eventMap) {
+			media.removeEventListener(eventName, handler);
+		}
+		this.media = null;
+		clearInterval(this.timer);
+	}
+	onTimer() {
+		const media = this.media;
+		const diff = Math.abs(media.currentTime - this.anime.currentTime / 1000);
+		if (!this.isWAAvailable || diff >= this.interval || media.paused !== this.paused) {
+			this.currentTime  = media.currentTime;
+			this.playbackRate = media.playbackRate;
+			this.paused       = media.paused;
+		}
+	}
+	onRaf() {
+		this.currentTime = Math.min(this.anime.currentTime / 1000, this.media.duration);
+		this.timestamp = Math.round(performance.now() * 1000);
+		!this.media.paused && (this.raf = requestAnimationFrame(this.onRaf));
+	}
+	get timestamp() {
+		try {
+			return Atomics.load(this.iview, MediaTimeline.MAP.timestamp);
+		} catch(e) {
+			return this.iview[MediaTimeline.MAP.timestamp];
+		}
+	}
+	set timestamp(v) {
+		try {
+			Atomics.store(this.iview, MediaTimeline.MAP.timestamp, v);
+			Atomics.wake(this.iview, MediaTimeline.MAP.timestamp);
+		} catch(e) {
+			this.iview[MediaTimeline.MAP.timestamp] = v;
+		}
+	}
+	get currentTime() {
+		return this.fview[MediaTimeline.MAP.currentTime];
+	}
+	set currentTime(v) {
+		v = isNaN(v) ? 0 : v;
+		this.fview[MediaTimeline.MAP.currentTime] = v;
+		this.anime.currentTime = v * 1000;
+	}
+	get duration() {
+		return this.fview[MediaTimeline.MAP.duration];
+	}
+	set duration(v) {
+		this.fview[MediaTimeline.MAP.duration] = v;
+	}
+	get playbackRate() {
+		return this.fview[MediaTimeline.MAP.playbackRate];
+	}
+	set playbackRate(v) {
+		this.fview[MediaTimeline.MAP.playbackRate] = v;
+		(this.anime.playbackRate !== v) && (this.anime.playbackRate = v);
+	}
+	get paused() {
+		return this.iview[MediaTimeline.MAP.paused] !== 0;
+	}
+	set paused(v) {
+		this.iview[MediaTimeline.MAP.paused] = v ? 1 : 0;
+		if (!this.isWAAvailable) { return; }
+		if (v) {
+			this.anime.pause();
+			cancelAnimationFrame(this.raf);
+			this.timestamp = 0;
+		} else {
+			this.anime.play();
+			requestAnimationFrame(this.onRaf);
+		}
+	}
+}
+MediaTimeline.MAP = {
+	currentTime: 0,
+	duration: 1,
+	playbackRate: 2,
+	paused: 3,
+	timestamp: 10
+};
+MediaTimeline.isSharable = ('SharedArrayBuffer' in window) && ('timeline' in document);
+MediaTimeline.register = function(name = 'main', media = null) {
+	if (!this.map.has(name)) {
+		const mt = new MediaTimeline({media});
+		this.map.set(name, mt);
+		return mt;
+	}
+	const mt = this.map.get(name);
+	media && mt.attach(media);
+	return mt;
+}.bind({map: new Map()});
+MediaTimeline.get = name => MediaTimeline.register(name);
 WatchInfoCacheDb.api(NicoVideoApi);
 StoryboardCacheDb.api(NicoVideoApi);
 
@@ -7743,7 +8077,7 @@ const {YouTubeWrapper} = (() => {
 		pause() {
 			this._player.pauseVideo();
 		}
-		get isPaused() {
+		get paused() {
 			return window.YT ?
 				this.playerState !== window.YT.PlayerState.PLAYING : true;
 		}
@@ -7753,6 +8087,7 @@ const {YouTubeWrapper} = (() => {
 			this._player.pauseVideo();
 			this._player.setPlaybackQuality(best);
 			this._player.playVideo();
+			window.console.info('bestQuality', {levels, best, current: this._player.getPlaybackQuality()});
 		}
 		_onSeekEnd() {
 			this._isSeeking = false;
@@ -7798,7 +8133,7 @@ const {YouTubeWrapper} = (() => {
 		set volume(v) {
 			if (this._volume !== v) {
 				this._volume = v;
-				this._player.volume = v * 100;
+				this._player.setVolume(v * 100);
 				this.emit('volumeChange', v);
 			}
 		}
@@ -8120,7 +8455,7 @@ class NicoVideoPlayer extends Emitter {
 	get isPlaying() {
 		return !!this._isPlaying;
 	}
-	get isPaused() {
+	get paused() {
 		return this._videoPlayer.paused;
 	}
 	get isSeeking() {
@@ -8268,9 +8603,9 @@ class ContextMenu extends BaseViewComponent {
 		const view = this._view;
 		this._onBeforeShow(x, y);
 		view.style.left =
-			cssUtil.px(Math.max(0, Math.min(x, window.innerWidth - view.offsetWidth)));
+			cssUtil.px(Math.max(0, Math.min(x, global.innerWidth - view.offsetWidth)));
 		view.style.top =
-			cssUtil.px(Math.max(0, Math.min(y + 20, window.innerHeight - view.offsetHeight)));
+			cssUtil.px(Math.max(0, Math.min(y + 20, global.innerHeight - view.offsetHeight)));
 		this.setState({isOpen: true});
 		global.emitter.emitAsync('showMenu');
 	}
@@ -8311,238 +8646,245 @@ class ContextMenu extends BaseViewComponent {
 			global.emitter.emitAsync('videoContextMenu.addonMenuReady.list',
 				view.find('.listInner ul'), handler
 			);
+			global.emitter.emitResolve('videoContextMenu.addonMenuReady',
+				{vier: view.find('.empty-area-top'), handler}
+			);
+			global.emitter.emitResolve('videoContextMenu.addonMenuReady.list',
+				{view: view.find('.listInner ul'), handler}
+			);
 		}
 	}
 }
 ContextMenu.__css__ = (`
-		.zenzaPlayerContextMenu {
-			position: fixed;
-			background: rgba(255, 255, 255, 0.8);
-			overflow: visible;
-			padding: 8px;
-			border: 1px outset #333;
-			box-shadow: 2px 2px 4px #000;
-			transition: opacity 0.3s ease;
-			min-width: 200px;
-			z-index: 150000;
-			user-select: none;
-			color: #000;
-		}
-		.zenzaPlayerContextMenu.is-Open {
-			display: block;
-			opacity: 0.5;
-		}
-		.zenzaPlayerContextMenu.is-Open:hover {
-			opacity: 1;
-		}
-		.is-fullscreen .zenzaPlayerContextMenu {
-			position: absolute;
-		}
-		.zenzaPlayerContextMenu:not(.is-Open) {
-			display: none;
-			/*left: -9999px;
-			top: -9999px;
-			opacity: 0;*/
-		}
-		.zenzaPlayerContextMenu ul {
-			padding: 0;
-			margin: 0;
-		}
-		.zenzaPlayerContextMenu ul li {
-			position: relative;
-			line-height: 120%;
-			margin: 2px;
-			overflow-y: visible;
-			white-space: nowrap;
-			cursor: pointer;
-			padding: 2px 14px;
-			list-style-type: none;
-			float: inherit;
-		}
-		.is-playlistEnable .zenzaPlayerContextMenu li.togglePlaylist:before,
-		.is-flipV          .zenzaPlayerContextMenu li.toggle-flipV:before,
-		.is-flipH          .zenzaPlayerContextMenu li.toggle-flipH:before,
-		.zenzaPlayerContextMenu ul                 li.selected:before {
-			content: '✔';
-			left: -10px;
-			color: #000 !important;
-			position: absolute;
-		}
-		.zenzaPlayerContextMenu ul li:hover {
-			background: #336;
-			color: #fff;
-		}
-		.zenzaPlayerContextMenu ul li.separator {
-			border: 1px outset;
-			height: 2px;
-			width: 90%;
-		}
-		.zenzaPlayerContextMenu.show {
-			opacity: 0.8;
-		}
-		.zenzaPlayerContextMenu .listInner {
-		}
-		.zenzaPlayerContextMenu .controlButtonContainer {
-			position: absolute;
-			bottom: 100%;
-			left: 50%;
-			width: 110%;
-			transform: translate(-50%, 0);
-			white-space: nowrap;
-		}
-		.zenzaPlayerContextMenu .controlButtonContainerFlex {
-			display: flex;
-		}
-		.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton {
-			flex: 1;
-			height: 48px;
-			font-size: 24px;
-			line-height: 46px;
-			border: 1px solid;
-			border-radius: 4px;
-			color: #333;
-			background: rgba(192, 192, 192, 0.95);
-			cursor: pointer;
-			transition: transform 0.1s, box-shadow 0.1s;
-			box-shadow: 0 0 0;
-			opacity: 1;
-			margin: auto;
-		}
-		.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.screenShot {
-			flex: 1;
-			font-size: 24px;
-		}
-		.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.playbackRate {
-			flex: 2;
-			font-size: 14px;
-		}
-		.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.rate010,
-		.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.rate100,
-		.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.rate200 {
-			flex: 3;
-			font-size: 24px;
-		}
-		.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.seek5s {
-			flex: 2;
-		}
-		.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.seek15s {
-			flex: 3;
-		}
-		.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton:hover {
-			transform: translate(0px, -4px);
-			box-shadow: 0px 4px 2px #666;
-		}
-		.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton:active {
-			transform: none;
-			box-shadow: 0 0 0;
-			border: 1px inset;
-		}
-		[data-command="picture-in-picture"] {
-			display: none;
-		}
-		.is-pictureInPictureEnabled [data-command="picture-in-picture"] {
-			display: block;
-		}
+	.zenzaPlayerContextMenu {
+		position: fixed;
+		background: rgba(255, 255, 255, 0.8);
+		overflow: visible;
+		padding: 8px;
+		border: 1px outset #333;
+		box-shadow: 2px 2px 4px #000;
+		transition: opacity 0.3s ease;
+		min-width: 200px;
+		z-index: 150000;
+		user-select: none;
+		color: #000;
+	}
+	.zenzaPlayerContextMenu.is-Open {
+		display: block;
+		opacity: 0.5;
+	}
+	.zenzaPlayerContextMenu.is-Open:hover {
+		opacity: 1;
+	}
+	.is-fullscreen .zenzaPlayerContextMenu {
+		position: absolute;
+	}
+	.zenzaPlayerContextMenu:not(.is-Open) {
+		display: none;
+		/*left: -9999px;
+		top: -9999px;
+		opacity: 0;*/
+	}
+	.zenzaPlayerContextMenu ul {
+		padding: 0;
+		margin: 0;
+	}
+	.zenzaPlayerContextMenu ul li {
+		position: relative;
+		line-height: 120%;
+		margin: 2px;
+		overflow-y: visible;
+		white-space: nowrap;
+		cursor: pointer;
+		padding: 2px 14px;
+		list-style-type: none;
+		float: inherit;
+	}
+	.is-playlistEnable .zenzaPlayerContextMenu li.togglePlaylist:before,
+	.is-flipV          .zenzaPlayerContextMenu li.toggle-flipV:before,
+	.is-flipH          .zenzaPlayerContextMenu li.toggle-flipH:before,
+	.zenzaPlayerContextMenu ul                 li.selected:before {
+		content: '✔';
+		left: -10px;
+		color: #000 !important;
+		position: absolute;
+	}
+	.zenzaPlayerContextMenu ul li:hover {
+		background: #336;
+		color: #fff;
+	}
+	.zenzaPlayerContextMenu ul li.separator {
+		border: 1px outset;
+		height: 2px;
+		width: 90%;
+	}
+	.zenzaPlayerContextMenu.show {
+		opacity: 0.8;
+	}
+	.zenzaPlayerContextMenu .listInner {
+	}
+	.zenzaPlayerContextMenu .controlButtonContainer {
+		position: absolute;
+		bottom: 100%;
+		left: 50%;
+		width: 110%;
+		transform: translate(-50%, 0);
+		white-space: nowrap;
+	}
+	.zenzaPlayerContextMenu .controlButtonContainerFlex {
+		display: flex;
+	}
+	.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton {
+		flex: 1;
+		height: 48px;
+		font-size: 24px;
+		line-height: 46px;
+		border: 1px solid;
+		border-radius: 4px;
+		color: #333;
+		background: rgba(192, 192, 192, 0.95);
+		cursor: pointer;
+		transition: transform 0.1s, box-shadow 0.1s;
+		box-shadow: 0 0 0;
+		opacity: 1;
+		margin: auto;
+	}
+	.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.screenShot {
+		flex: 1;
+		font-size: 24px;
+	}
+	.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.playbackRate {
+		flex: 2;
+		font-size: 14px;
+	}
+	.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.rate010,
+	.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.rate100,
+	.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.rate200 {
+		flex: 3;
+		font-size: 24px;
+	}
+	.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.seek5s {
+		flex: 2;
+	}
+	.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton.seek15s {
+		flex: 3;
+	}
+	.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton:hover {
+		transform: translate(0px, -4px);
+		box-shadow: 0px 4px 2px #666;
+	}
+	.zenzaPlayerContextMenu .controlButtonContainerFlex > .controlButton:active {
+		transform: none;
+		box-shadow: 0 0 0;
+		border: 1px inset;
+	}
+	[data-command="picture-in-picture"] {
+		display: none;
+	}
+	.is-pictureInPictureEnabled [data-command="picture-in-picture"] {
+		display: block;
+	}
 	`).trim();
 ContextMenu.__tpl__ = (`
-		<div class="zenzaPlayerContextMenu">
-			<div class="controlButtonContainer">
-				<div class="controlButtonContainerFlex">
-					<div class="controlButton command screenShot" data-command="screenShot"
-						data-param="0.1" data-type="number" data-is-no-close="true">
-						&#128247;<div class="tooltip">スクリーンショット</div>
-					</div>
-					<div class="empty-area-top" style="flex:4;" data-is-no-close="true"></div>
+	<div class="zenzaPlayerContextMenu">
+		<div class="controlButtonContainer">
+			<div class="controlButtonContainerFlex">
+				<div class="controlButton command screenShot" data-command="screenShot"
+					data-param="0.1" data-type="number" data-is-no-close="true">
+					&#128247;<div class="tooltip">スクリーンショット</div>
 				</div>
-				<div class="controlButtonContainerFlex">
-					<div class="controlButton command rate010 playbackRate" data-command="playbackRate"
-						data-param="0.1" data-type="number" data-repeat="on">
-						&#128034;<div class="tooltip">コマ送り(0.1倍)</div>
-					</div>
-					<div class="controlButton command rate050 playbackRate" data-command="playbackRate"
-						data-param="0.5" data-type="number" data-repeat="on">
-						<div class="tooltip">0.5倍速</div>
-					</div>
-					<div class="controlButton command rate075 playbackRate" data-command="playbackRate"
-						data-param="0.75" data-type="number" data-repeat="on">
-						<div class="tooltip">0.75倍速</div>
-					</div>
-					<div class="controlButton command rate100 playbackRate" data-command="playbackRate"
-						data-param="1.0" data-type="number" data-repeat="on">
-						&#9655;<div class="tooltip">標準速</div>
-					</div>
-					<div class="controlButton command rate125 playbackRate" data-command="playbackRate"
-						data-param="1.25" data-type="number" data-repeat="on">
-						<div class="tooltip">1.25倍速</div>
-					</div>
-					<div class="controlButton command rate150 playbackRate" data-command="playbackRate"
-						data-param="1.5" data-type="number" data-repeat="on">
-						<div class="tooltip">1.5倍速</div>
-					</div>
-					<div class="controlButton command rate200 playbackRate" data-command="playbackRate"
-						data-param="2.0" data-type="number" data-repeat="on">
-						&#128007;<div class="tooltip">2倍速</div>
-					</div>
+				<div class="empty-area-top" style="flex:4;" data-is-no-close="true"></div>
+			</div>
+			<div class="controlButtonContainerFlex">
+				<div class="controlButton command rate010 playbackRate" data-command="playbackRate"
+					data-param="0.1" data-type="number" data-repeat="on">
+					&#128034;<div class="tooltip">コマ送り(0.1倍)</div>
 				</div>
-				<div class="controlButtonContainerFlex seekToResumePoint">
-					<div class="controlButton command"
-					data-command="seekToResumePoint"
-					>▼ここまで見た
-						<div class="tooltip">レジューム位置にジャンプ</div>
-					</div>
+				<div class="controlButton command rate050 playbackRate" data-command="playbackRate"
+					data-param="0.5" data-type="number" data-repeat="on">
+					<div class="tooltip">0.5倍速</div>
 				</div>
-				<div class="controlButtonContainerFlex">
-					<div class="controlButton command seek5s"
-						data-command="seekBy" data-param="-5" data-type="number" data-repeat="on"
-						>⇦
-							<div class="tooltip">5秒戻る</div>
-					</div>
-					<div class="controlButton command seek15s"
-						data-command="seekBy" data-param="-15" data-type="number" data-repeat="on"
-						>⇦
-							<div class="tooltip">15秒戻る</div>
-					</div>
-					<div class="controlButton command seek15s"
-						data-command="seekBy" data-param="15" data-type="number" data-repeat="on"
-						>⇨
-							<div class="tooltip">15秒進む</div>
-					</div>
-					<div class="controlButton command seek5s"
-						data-command="seekBy" data-param="5" data-type="number" data-repeat="on"
-						>⇨
-							<div class="tooltip">5秒進む</div>
-					</div>
+				<div class="controlButton command rate075 playbackRate" data-command="playbackRate"
+					data-param="0.75" data-type="number" data-repeat="on">
+					<div class="tooltip">0.75倍速</div>
+				</div>
+				<div class="controlButton command rate100 playbackRate" data-command="playbackRate"
+					data-param="1.0" data-type="number" data-repeat="on">
+					&#9655;<div class="tooltip">標準速</div>
+				</div>
+				<div class="controlButton command rate125 playbackRate" data-command="playbackRate"
+					data-param="1.25" data-type="number" data-repeat="on">
+					<div class="tooltip">1.25倍速</div>
+				</div>
+				<div class="controlButton command rate150 playbackRate" data-command="playbackRate"
+					data-param="1.5" data-type="number" data-repeat="on">
+					<div class="tooltip">1.5倍速</div>
+				</div>
+				<div class="controlButton command rate200 playbackRate" data-command="playbackRate"
+					data-param="2.0" data-type="number" data-repeat="on">
+					&#128007;<div class="tooltip">2倍速</div>
 				</div>
 			</div>
-			<div class="listInner">
-				<ul>
-					<li class="command" data-command="togglePlay">停止/再開</li>
-					<li class="command" data-command="seekTo" data-param="0">先頭に戻る</li>
-					<hr class="separator">
-					<li class="command toggleLoop"        data-config="loop" data-command="toggle-loop">リピート</li>
-					<li class="command togglePlaylist"    data-command="togglePlaylist">連続再生</li>
-					<li class="command toggleShowComment" data-config="showComment" data-command="toggle-showComment">コメントを表示</li>
-					<li class="command" data-command="picture-in-picture">P in P</li>
-					<hr class="separator">
-					<li class="command forPremium toggle-flipH" data-command="toggle-flipH">左右反転</li>
-					<li class="command toggle-flipV"            data-command="toggle-flipV">上下反転</li>
-					<hr class="separator">
-					<li class="command"
-						data-command="reload">動画のリロード</li>
-					<li class="command"
-						data-command="copy-video-watch-url">動画URLをコピー</li>
-					<li class="command debug" data-config="debug"
-						data-command="toggle-debug">デバッグ</li>
-					<li class="command mymemory"
-						data-command="saveMymemory">コメントの保存</li>
-				</ul>
+			<div class="controlButtonContainerFlex seekToResumePoint">
+				<div class="controlButton command"
+				data-command="seekToResumePoint"
+				>▼ここまで見た
+					<div class="tooltip">レジューム位置にジャンプ</div>
+				</div>
+			</div>
+			<div class="controlButtonContainerFlex">
+				<div class="controlButton command seek5s"
+					data-command="seekBy" data-param="-5" data-type="number" data-repeat="on"
+					>⇦
+						<div class="tooltip">5秒戻る</div>
+				</div>
+				<div class="controlButton command seek15s"
+					data-command="seekBy" data-param="-15" data-type="number" data-repeat="on"
+					>⇦
+						<div class="tooltip">15秒戻る</div>
+				</div>
+				<div class="controlButton command seek15s"
+					data-command="seekBy" data-param="15" data-type="number" data-repeat="on"
+					>⇨
+						<div class="tooltip">15秒進む</div>
+				</div>
+				<div class="controlButton command seek5s"
+					data-command="seekBy" data-param="5" data-type="number" data-repeat="on"
+					>⇨
+						<div class="tooltip">5秒進む</div>
+				</div>
 			</div>
 		</div>
-	`).trim();
+		<div class="listInner">
+			<ul>
+				<li class="command" data-command="togglePlay">停止/再開</li>
+				<li class="command" data-command="seekTo" data-param="0">先頭に戻る</li>
+				<hr class="separator">
+				<li class="command toggleLoop"        data-config="loop" data-command="toggle-loop">リピート</li>
+				<li class="command togglePlaylist"    data-command="togglePlaylist">連続再生</li>
+				<li class="command toggleShowComment" data-config="showComment" data-command="toggle-showComment">コメントを表示</li>
+				<li class="command" data-command="picture-in-picture">P in P</li>
+				<hr class="separator">
+				<li class="command forPremium toggle-flipH" data-command="toggle-flipH">左右反転</li>
+				<li class="command toggle-flipV"            data-command="toggle-flipV">上下反転</li>
+				<hr class="separator">
+				<li class="command"
+					data-command="reload">動画のリロード</li>
+				<li class="command"
+					data-command="copy-video-watch-url">動画URLをコピー</li>
+				<li class="command debug" data-config="debug"
+					data-command="toggle-debug">デバッグ</li>
+				<li class="command mymemory"
+					data-command="saveMymemory">コメントの保存</li>
+			</ul>
+		</div>
+	</div>
+`).trim();
 class VideoPlayer extends Emitter {
 	constructor(params) {
 		super();
 		this._initialize(params);
+		global.debug.timeline = MediaTimeline.register('main', this);
 	}
 	_initialize(params) {
 		this._id = 'video' + Math.floor(Math.random() * 100000);
@@ -8555,15 +8897,15 @@ class VideoPlayer extends Emitter {
 		this._canPlay = false;
 	}
 	addClass(className) {
-		this._body.classList.add(...className.split(/\s/));
+		this.classList.add(...className.split(/\s/));
 	}
 	removeClass(className) {
-		this._body.classList.remove(...className.split(/\s/));
+		this.classList.remove(...className.split(/\s/));
 	}
 	toggleClass(className, v) {
-		const body = this._body;
+		const classList = this.classList;
 		className.split(/[ ]+/).forEach(name => {
-			body.classList.toggle(name, v);
+			classList.toggle(name, v);
 		});
 	}
 	_resetVideo(params) {
@@ -8596,6 +8938,7 @@ class VideoPlayer extends Emitter {
 			.attr(options);
 		body.id = 'ZenzaWatchVideoPlayerContainer';
 		this._body = body;
+		this.classList = ClassList(body);
 		body.append(video);
 		video.pause();
 		this._video = video;
@@ -8821,7 +9164,7 @@ class VideoPlayer extends Emitter {
 	get isPlaying() {
 		return !!this._isPlaying && !!this._canPlay;
 	}
-	get isPaused() {
+	get paused() {
 		return this._video.paused;
 	}
 	set thumbnail(url) {
@@ -9342,7 +9685,7 @@ class StoryboardView extends Emitter {
 		console.log('%c initialize StoryboardView', 'background: lightgreen;');
 		this._container = params.container;
 		const sb = this._model = params.model;
-		this.isHover = false;
+		this._isHover = false;
 		this._currentUrl = '';
 		this._lastPage = -1;
 		this._lastMs = -1;
@@ -9356,6 +9699,21 @@ class StoryboardView extends Emitter {
 		);
 		global.emitter.on('DialogPlayerClose', () => frame.disable());
 	}
+	get isHover() {
+		return this._isHover;
+	}
+	set isHover(v) {
+		this._isHover = v;
+		this.updateAnimation();
+	}
+	updateAnimation() {
+		if (!this.canvas || !MediaTimeline.isSharable) { return; }
+		if (this._isHover) {
+			this.canvas.stopAnimation();
+		} else if (!this._isHover && this._isEnable) {
+			this.canvas.startAnimation();
+		}
+	}
 	enable() {
 		this._isEnable = true;
 		if (this._view && this._model.isAvailable) {
@@ -9366,19 +9724,21 @@ class StoryboardView extends Emitter {
 		if (!this._view) {
 			return;
 		}
-		this._view.classList.add('is-open');
-		this._body.classList.add('zenzaStoryboardOpen');
-		this._container.classList.add('zenzaStoryboardOpen');
+		ClassList(this._view).add('is-open');
+		ClassList(this._body).add('zenzaStoryboardOpen');
+		ClassList(this._container).add('zenzaStoryboardOpen');
 		this._requestAnimationFrame.enable();
+		this.updateAnimation();
 	}
 	close() {
 		if (!this._view) {
 			return;
 		}
-		this._view.classList.remove('is-open');
-		this._body.classList.remove('zenzaStoryboardOpen');
-		this._container.classList.remove('zenzaStoryboardOpen');
+		ClassList(this._view).remove('is-open');
+		ClassList(this._body).remove('zenzaStoryboardOpen');
+		ClassList(this._container).remove('zenzaStoryboardOpen');
 		this._requestAnimationFrame.disable();
+		this.updateAnimation();
 	}
 	disable() {
 		this._isEnable = false;
@@ -9401,7 +9761,7 @@ class StoryboardView extends Emitter {
 		if (this._body) { return; }
 		window.console.log('%cStoryboardView.initializeStoryboard', 'background: lightgreen;');
 		this._body = document.body;
-		css.addStyle(StoryboardView.__css__);
+		cssUtil.addStyle(StoryboardView.__css__);
 		const view = this._view = uq.html(StoryboardView.__tpl__)[0];
 		const inner = this._inner = view.querySelector('.storyboardInner');
 		this._bone = view.querySelector('.storyboardInner-bone');
@@ -9409,7 +9769,7 @@ class StoryboardView extends Emitter {
 		this._cursorTime = view.querySelector('.cursorTime');
 		this._pointer = view.querySelector('.storyboardPointer');
 		this._inner = inner;
-		TextLabel.create({
+		this.cursorTimeLabel = TextLabel.create({
 			container: this._cursorTime,
 			name: 'cursorTimeLabel',
 			text: '00:00',
@@ -9421,7 +9781,7 @@ class StoryboardView extends Emitter {
 				fontSizePx: 13.3,
 				color: '#000'
 			}
-		}).then(label => this.cursorTimeLabel = label);
+		});
 		uq(inner)
 			.on('click', this._onBoardClick.bind(this))
 			.on('mousemove', this._onBoardMouseMove.bind(this))
@@ -9439,36 +9799,34 @@ class StoryboardView extends Emitter {
 		this._container.append(view);
 		view.closest('.zen-root')
 			.addEventListener('touchend', () => this.isHover = false, {passive: true});
-		this._innerWidth = window.innerWidth;
 		window.addEventListener('resize',
 			_.throttle(() => {
-				const width = this._innerWidth = window.innerWidth;
 				if (this.canvas) {
-					this.canvas.resize({width, height: this._model.cellHeight});
+					this.canvas.resize({width: global.innerWidth, height: this._model.cellHeight});
 				}
 			}, 500), {passive: true});
 	}
 	_onBoardClick(e) {
 		const model = this._model;
-		const innerWidth = model.cellCount * model.cellWidth;
+		const totalWidth = model.cellCount * model.cellWidth;
 		const x = e.clientX + this._scrollLeft;
 		const duration = model.duration;
-		const sec = x / innerWidth * duration;
+		const sec = x / totalWidth * duration;
 		const view = this._view;
-		this._cursorTime.style.setProperty('--trans-x-pp', cssUtil.px(-1000));
+		cssUtil.setProps([this._cursorTime, '--trans-x-pp', cssUtil.px(-1000)]);
 		domEvent.dispatchCommand(view, 'seekTo', sec);
 	}
 	_onBoardMouseMove(e) {
 		const model = this._model;
-		const innerWidth = model.cellCount * model.cellWidth;
+		const totalWidth = model.cellCount * model.cellWidth;
 		const x = e.clientX + this._scrollLeft;
 		const duration = model.duration;
-		const sec = x / innerWidth * duration;
+		const sec = x / totalWidth * duration;
 		const time = textUtil.secToTime(sec);
 		if (this.cursorTimeLabel && this.cursorTimeLabel.text !== time) {
 			this.cursorTimeLabel.text = time;
 		}
-		this._cursorTime.style.setProperty('--trans-x-pp', cssUtil.px(e.x));
+		cssUtil.setProps([this._cursorTime, '--trans-x-pp', cssUtil.px(e.x)]);
 		this.isHover = true;
 		this._isMouseMoving = true;
 	}
@@ -9517,7 +9875,7 @@ class StoryboardView extends Emitter {
 		this._scrollLeft = 0;
 		this._initializeStoryboard(this._model);
 		this.close();
-		this._view.classList.remove('is-success', 'is-fail');
+		ClassList(this._view).remove('is-success', 'is-fail');
 		if (this._model.status === 'ok') {
 			this._updateSuccess();
 		} else {
@@ -9538,50 +9896,58 @@ class StoryboardView extends Emitter {
 			if (Math.abs(this._scrollLeft - left) < 1) {
 				return;
 			}
-			this.isEnable && this.canvas && (this.canvas.scrollLeft = left);
+			this.isEnable && this.canvas && !this.canvas.isAnimating && (this.canvas.scrollLeft = left);
 			this._scrollLeft = left;
 			this._scrollLeftChanged = true;
 		}
 	}
 	_updateSuccess() {
 		const view = this._view;
-		view.classList.add('is-success');
+		const cl = ClassList(view);
+		cl.add('is-success');
 		window.console.time('createStoryboardDOM');
 		this._updateSuccessDom();
 		window.console.timeEnd('createStoryboardDOM');
 		if (this._isEnable) {
-			view.classList.add('opening', 'is-open');
+			cl.add('opening', 'is-open');
 			this.scrollLeft(0);
 			this.open();
-			window.setTimeout(() => view.classList.remove('opening'), 1000);
+			window.setTimeout(() => cl.remove('opening'), 1000);
 		}
 	}
 	_updateSuccessDom() {
 		const model = this._model;
 		const infoRawData = model.rawData;
 		if (!this.canvas) {
-			StoryboardWorker.createBoard({
+			this.canvas = StoryboardWorker.createBoard({
 				container: this._view.querySelector('.storyboardCanvasContainer'),
 				canvas: this._view.querySelector('.storyboardCanvas'),
 				info: infoRawData,
 				name: 'StoryboardCanvasView'
-			}).then(v => {
-				this.canvas = v;
-				this.canvas.resize({width: this._innerWidth, height: model.cellHeight});
 			});
+			this.canvas.resize({width: global.innerWidth, height: model.cellHeight});
+			if (MediaTimeline.isSharable) {
+				const mt = MediaTimeline.get('main');
+				this.canvas.currentTime = mt.currentTime;
+				this.canvas.sharedMemory({buffer: mt.buffer, MAP: MediaTimeline.MAP});
+				this.canvas.startAnimation();
+			}
 		} else {
 			this.canvas.setInfo(infoRawData);
-			this.canvas.resize({width: this._innerWidth, height: model.cellHeight});
+			this.canvas.resize({width: global.innerWidth, height: model.cellHeight});
 		}
-		this._bone.style.setProperty('--width-pp',  cssUtil.px(model.cellCount * model.cellWidth));
-		this._bone.style.setProperty('--height-pp', cssUtil.px(model.cellHeight));
-		this._inner.style.height = cssUtil.px(model.cellHeight + 8);
-		this._pointer.style.setProperty('--width-pp', cssUtil.px(model.cellWidth));
-		this._pointer.style.setProperty('--height-pp', cssUtil.px(model.cellHeight));
+		cssUtil.setProps(
+			[this._bone,    '--width-pp',  cssUtil.px(model.cellCount * model.cellWidth)],
+			[this._bone,    '--height-pp', cssUtil.px(model.cellHeight)],
+			[this._pointer, '--width-pp',  cssUtil.px(model.cellWidth)],
+			[this._pointer, '--height-pp', cssUtil.px(model.cellHeight)],
+			[this._inner,   '--height-pp', cssUtil.px(model.cellHeight + 8)]
+		);
 	}
 	_updateFail() {
-		this._view.classList.remove('is-uccess');
-		this._view.classList.add('is-fail');
+		const cl = ClassList(this._view);
+		cl.remove('is-uccess');
+		cl.add('is-fail');
 	}
 	clear() {
 	}
@@ -9595,7 +9961,8 @@ class StoryboardView extends Emitter {
 			this._pointerLeftChanged = true;
 		}
 		if (this._pointerLeftChanged) {
-			this._pointer.style.setProperty('--trans-x-pp', cssUtil.px(this._pointerLeft - this._scrollLeft));
+			cssUtil.setProps([this._pointer, '--trans-x-pp',
+				cssUtil.px(this._pointerLeft - this._scrollLeft)]);
 			this._pointerLeftChanged = false;
 		}
 	}
@@ -9611,20 +9978,19 @@ class StoryboardView extends Emitter {
 		const ms = sec * 1000;
 		const duration = Math.max(1, model.duration);
 		const per = ms / (duration * 1000);
-		const width = model.cellWidth;
-		const totalWidth = model.cellCount * width;
-		const targetLeft = totalWidth * per;
+		const totalWidth = model.cellCount * model.cellWidth;
+		const targetLeft = Math.min(Math.max(0, totalWidth * per), totalWidth - global.innerWidth);
 		if (this._pointerLeft !== targetLeft) {
 			this._pointerLeft = targetLeft;
 			this._pointerLeftChanged = true;
 		}
 		if (forceUpdate) {
-			this.scrollLeft(targetLeft - this._innerWidth * per, true);
+			this.scrollLeft(Math.max(0, targetLeft - global.innerWidth * per), true);
 		} else {
 			if (this.isHover) {
 				return;
 			}
-			this.scrollLeft(targetLeft - this._innerWidth * per);
+			this.scrollLeft(Math.max(0, targetLeft - global.innerWidth * per));
 		}
 	}
 	get currentTime() {
@@ -9643,13 +10009,13 @@ class StoryboardView extends Emitter {
 			return;
 		}
 		this.close();
-		this._view.classList.remove('is-open', 'is-fail');
+		ClassList(this._view).remove('is-open', 'is-fail');
 	}
 }
 StoryboardView.__tpl__ = `
 	<div id="storyboardContainer" class="storyboardContainer">
 		<div class="cursorTime"></div>
-		<div class="storyboardCanvasContainer"><canvas class="storyboardCanvas" height="90"></canvas></div>
+		<div class="storyboardCanvasContainer"><canvas class="storyboardCanvas is-loading" height="90"></canvas></div>
 		<div class="storyboardPointer"></div>
 		<div class="storyboardInner"><div class="storyboardInner-bone"></div></div>
 		<div class="failMessage"></div>
@@ -9665,8 +10031,8 @@ StoryboardView.__css__ = (`
 		right: 0;
 		width: 100vw;
 		box-sizing: border-box;
-		border-top: 2px solid #ccc;
-		background: #222;
+		/*border-top: 2px solid #ccc;
+		background: rgba(32, 32, 32, 0.3);*/
 		z-index: 9005;
 		overflow: hidden;
 		pointer-events: none;
@@ -9716,17 +10082,24 @@ StoryboardView.__css__ = (`
 	.storyboardCanvas {
 		width: 100%;
 		height: 100%;
+		opacity: 1;
+		transition: opacity 0.5s ease 0.5s;
+	}
+	.storyboardCanvas.is-loading {
+		opacity: 0;
+		transition: none;
 	}
 	.storyboardContainer .storyboardInner {
+		--height-pp: 98px;
+		height: var(--height-pp);
 		display: none;
 		overflow: hidden;
-		background: rgba(32, 32, 32, 0.5);
+		/*background: rgba(32, 32, 32, 0.5);*/
 		margin: 0;
 		contain: strict;
 		width: 100vw;
 		will-change: transform;
 		overscroll-behavior: contain;
-		padding-bottom: 8px;
 	}
 	.storyboardContainer.is-success .storyboardInner {
 		display: block;
@@ -9800,35 +10173,33 @@ class SeekBarThumbnail {
 		this.hide();
 	}
 	get isVisible() {
-		return this._view ? this._view.classList.contains('is-visible') : false;
+		return this._view ? this.classList.contains('is-visible') : false;
 	}
 	show() {
 		if (!this._view) {
 			return;
 		}
-		this._view.classList.add('is-visible');
+		this.classList.add('is-visible');
 	}
 	hide() {
 		if (!this._view) {
 			return;
 		}
-		this._view.classList.remove('is-visible');
+		this.classList.remove('is-visible');
 	}
 	initializeView(model) {
 		this.initializeView = _.noop;
 		if (!SeekBarThumbnail.styleAdded) {
-			css.addStyle(SeekBarThumbnail.__css__);
+			cssUtil.addStyle(SeekBarThumbnail.__css__);
 			SeekBarThumbnail.styleAdded = true;
 		}
 		const view = this._view = uQuery.html(SeekBarThumbnail.__tpl__)[0];
-		StoryboardWorker.createThumbnail({
+		this.classList = ClassList(view);
+		this.thumbnail = StoryboardWorker.createThumbnail({
 			container: view.querySelector('.zenzaSeekThumbnail-image'),
 			canvas: view.querySelector('.zenzaSeekThumbnail-thumbnail'),
 			info: model.rawData,
 			name: 'StoryboardThumbnail'
-		}).then(thumbnail => {
-			this.thumbnail = thumbnail;
-			thumbnail.currentTime = this._currentTime;
 		});
 		if (this._container) {
 			this._container.append(view);
@@ -9882,14 +10253,6 @@ SeekBarThumbnail.__css__ = (`
 		margin: 0 auto 4px;
 		z-index: 100;
 	}
-	/*.zenzaSeekThumbnail-image {
-		background: none repeat scroll 0 0 #999;
-		border: 0;
-		margin: auto;
-		transform-origin: center top;
-		transition: background-position 0.1s steps(1, start) 0;
-		opacity: 0.8;
-	}*/
 `).trim();
 const StoryboardWorker = (() => {
 	const func = function(self) {
@@ -10087,14 +10450,22 @@ const StoryboardWorker = (() => {
 				this._info = null;
 				this.lastPos = {};
 				this.ctx = canvas.getContext('2d', {alpha: false, desynchronized: true});
+				this.bitmapCtx = canvas.getContext('bitmaprenderer');
 				this.bufferCanvas = getCanvas(canvas.width, canvas.height);
 				this.bufferCtx = this.bufferCanvas.getContext('2d', {alpha: false, desynchronized: true});
 				this.images = ImageCacheMap;
 				this.totalWidth = 0;
 				this.isReady = false;
 				this.boards = [];
+				this.isAnimating = false;
+				this.raf = null;
 				this.cls();
-				info && this.setInfo(info);
+				this.onRequestAnimationFrame = this.onRequestAnimationFrame.bind(this);
+				if (info) {
+					this.isInitialized = this.setInfo(info);
+				} else {
+					this.isInitialized = Promise.resolve();
+				}
 			}
 			get info() { return this._info; }
 			set info(infoRawData) { this.setInfo(infoRawData); }
@@ -10105,6 +10476,7 @@ const StoryboardWorker = (() => {
 				if (!info.isAvailable) {
 					return this.cls();
 				}
+				console.time('BoardView setInfo');
 				const cols = info.cols;
 				const rows = info.rows;
 				const pageWidth  = info.pageWidth;
@@ -10145,12 +10517,23 @@ const StoryboardWorker = (() => {
 				this.height = info.cellHeight;
 				this._currentTime = -1;
 				this.cls();
+				console.timeEnd('BoardView setInfo');
 				this.isReady = true;
+				this.reDraw();
+			}
+			reDraw() {
+				const left = this._scrollLeft;
+				this._scrollLeft = -1;
+				this.scrollLeft = left;
 			}
 			get scrollLeft() {
 				return this._scrollLeft;
 			}
 			set scrollLeft(left) {
+				if (this._scrollLeft === left) {
+					return;
+				}
+				this._scrollLeft = left;
 				if (!this.info || !this.info.isAvailable || !this.isReady) {
 					return;
 				}
@@ -10163,7 +10546,7 @@ const StoryboardWorker = (() => {
 				const bctx = this.bufferCtx;
 				bctx.beginPath();
 				if (isOutrange) {
-					bctx.fillStyle = 'rgb(32, 32, 32)';
+					bctx.fillStyle = 'rgba(32, 32, 32, 0.3)';
 					bctx.fillRect(0, 0, width, height);
 				}
 				for (const board of this.boards) {
@@ -10179,21 +10562,18 @@ const StoryboardWorker = (() => {
 						);
 					}
 				}
-				const scrollBarLength = width / totalWidth * width;
+				const scrollBarLength = width * width / totalWidth;
 				if (scrollBarLength < width) {
-					const scrollBarLeft = left / totalWidth * width;
+					const scrollBarLeft = width * left / totalWidth;
 					bctx.fillStyle = 'rgba(240, 240, 240, 0.8)';
 					bctx.fillRect(scrollBarLeft, height - SCROLL_BAR_WIDTH, scrollBarLength, SCROLL_BAR_WIDTH);
 				}
-				if (this.bufferCanvas.transferToImageBitmap && this.canvas.transferFromImageBitmap) {
-					this.canvas.transferFromImageBitmap(this.bufferCanvas.transferToImageBitmap());
+				if (this.bufferCanvas.transferToImageBitmap && this.bitmapCtx && this.bitmapCtx.transferFromImageBitmap) {
+					const bitmap = this.bufferCanvas.transferToImageBitmap();
+					this.bitmapCtx.transferFromImageBitmap(bitmap);
 				} else {
 					this.ctx.beginPath();
-					this.ctx.drawImage(this.bufferCanvas,
-						0, 0, width, height,
-						0, 0, width, height
-					);
-					this.ctx.commit && this.ctx.commit();
+					this.ctx.drawImage(this.bufferCanvas, 0, 0, width, height,0, 0, width, height);
 				}
 			}
 			cls() {
@@ -10215,15 +10595,82 @@ const StoryboardWorker = (() => {
 				this.canvas.height = height;
 				this.bufferCanvas.height = height;
 			}
-			async setCurrentTime(time) {
-				const r = time / Math.max(this.info.duration, 1);
-				const left = this.totalWidth * r - this.width / 2;
+			setCurrentTime(sec) {
+				const ms = sec * 1000;
+				const duration = Math.max(1, this.info.duration);
+				const per = ms / (duration * 1000);
+				const r = sec / duration;
+				const left = Math.min(Math.max(this.totalWidth * r - this.width * per, 0), this.totalWidth - this.width);
 				this.scrollLeft = left;
 			}
 			resize({width, height}) {
 				width && (this.width = width);
 				height && (this.height = height);
-				this.cls();
+				if (this.isReady) {
+					this.reDraw();
+				} else {
+					this.cls();
+				}
+			}
+			sharedMemory({buffer, MAP}) {
+				const view = new Float32Array(buffer);
+				const iview = new Int32Array(buffer);
+				this.buffer = {
+					get currentTime() {
+						return view[MAP.currentTime];
+					},
+					get timestamp() {
+						return iview[MAP.timestamp];
+					},
+					wait() {
+						const tm = Atomics.load(iview, MAP.timestamp);
+						Atomics.wait(iview, MAP.timestamp, tm, 3000);
+						return Atomics.load(iview, MAP.timestamp);
+					},
+					get duration() {
+						return view[MAP.duration];
+					},
+					get playbackRate() {
+						return view[MAP.playbackRate];
+					},
+					get paused() {
+						return iview[MAP.paused] !== 0;
+					}
+				};
+			}
+			onRequestAnimationFrame() {
+				this.currentTime = this.buffer.currentTime;
+				this.isAnimating && (this.raf = requestAnimationFrame(this.onRequestAnimationFrame));
+			}
+			async execAnimation() { // SharedArrayBufferで遊びたかっただけ. 最適化の余地はありそう
+				this.isAnimating = true;
+				const buffer = this.buffer;
+				while (this.isAnimating) {
+					while (!this.isReady) {
+						await new Promise(res => setTimeout(res, 500));
+					}
+					while (this.isReady && this.isAnimating && !buffer.paused) {
+						buffer.wait();
+						this.currentTime = this.buffer.currentTime;
+						await new Promise(res => setTimeout(res, 8));
+					}
+					if (!this.isAnimating) { return; }
+					await new Promise(res => setTimeout(res, 1000));
+				}
+			}
+			startAnimation() {
+				if (!this.buffer || this.isAnimating) { return; }
+				this.currentTime = this.buffer.currentTime;
+				this.execAnimation();
+			}
+			stopAnimation() {
+				cancelAnimationFrame(this.raf);
+				this.isAnimating = false;
+			}
+			dispose() {
+				this.stopAnimation();
+				this.isReady = false;
+				this.boards.length = 0;
 			}
 		}
 		class ThumbnailView {
@@ -10236,13 +10683,23 @@ const StoryboardWorker = (() => {
 				this.ctx = canvas.getContext('2d', {alpha: false, desynchronized: true});
 				this.images = ImageCacheMap;
 				this.cls();
+				this.isInitialized = Promise.resolve();
+				this.isAnimating = false;
 			}
 			get info() { return this._info; }
 			set info(info) {
+				this.isReady = false;
 				this.info && this.info.imageUrls.forEach(url => this.images.release(url));
 				this._info.update(info);
 				this._currentTime = -1;
 				this.cls();
+				if (!info.isAvailable) {
+					return;
+				}
+				this.isReady = true;
+			}
+			async setInfo(info) {
+				this.info = info;
 			}
 			cls() {
 				this.ctx.clearRect(0, 0, this.width, this.height);
@@ -10288,20 +10745,40 @@ const StoryboardWorker = (() => {
 				this.info && this.info.imageUrls.forEach(url => this.images.release(url));
 				this.info = null;
 			}
+			sharedMemory() {}
+			async execAnimation() {
+				while (this.isAnimating) {
+					while (!this.isReady) {
+						await new Promise(res => setTimeout(res, 500));
+					}
+					await this.setCurrentTime((this.currentTime + this.info.interval / 1000) % this.info.duration);
+					if (!this.isAnimating) { return; }
+					await new Promise(res => setTimeout(res, 1000));
+				}
+			}
+			startAnimation() {
+				if (this.isAnimating) { return; }
+				this.isAnimating = true;
+				this.execAnimation();
+			}
+			stopAnimation() {
+				this.isAnimating = false;
+			}
 		}
 		const getId = function() {return `Storyboard-${this.id++}`;}.bind({id: 0});
-		const createView = ({canvas, info, name}, type = 'thumbnail') => {
+		const createView = async ({canvas, info, name}, type = 'thumbnail') => {
 			const id = getId();
 			const view = type === 'thumbnail' ?
 				new ThumbnailView({canvas, info, name}) :
 				new BoardView({canvas, info, name});
 			items[id] = view;
+			await view.isInitialized;
 			return {status: 'ok', id};
 		};
-		const info = ({id, info}) => {
+		const info = async ({id, info}) => {
 			const item = items[id];
 			if (!item) { throw new Error(`unknown id:${id}`); }
-			item.info = info;
+			await item.setInfo(info);
 			return {status: 'ok'};
 		};
 		const currentTime = ({id, currentTime}) => {
@@ -10335,6 +10812,24 @@ const StoryboardWorker = (() => {
 			delete items[id];
 			return {status: 'ok'};
 		};
+		const sharedMemory = ({id, buffer, MAP}) => {
+			const item = items[id];
+			if (!item) { throw new Error(`unknown id:${id}`); }
+			item.sharedMemory({buffer, MAP});
+			return {status: 'ok'};
+		};
+		const startAnimation = ({id, interval}) => {
+			const item = items[id];
+			if (!item) { throw new Error(`unknown id:${id}`); }
+			item.startAnimation();
+			return {status: 'ok'};
+		};
+		const stopAnimation = ({id, interval}) => {
+			const item = items[id];
+			if (!item) { throw new Error(`unknown id:${id}`); }
+			item.stopAnimation();
+			return {status: 'ok'};
+		};
 		self.onmessage = async ({command, params}) => {
 			switch (command) {
 				case 'createThumbnail':
@@ -10353,7 +10848,13 @@ const StoryboardWorker = (() => {
 					return cls(params);
 				case 'dispose':
 					return dispose(params);
-			}
+				case 'sharedMemory':
+					return sharedMemory(params);
+				case 'startAnimation':
+					return startAnimation(params);
+				case 'stopAnimation':
+					return stopAnimation(params);
+				}
 		};
 	};
 	const isOffscreenCanvasAvailable = !!HTMLCanvasElement.prototype.transferControlToOffscreen;
@@ -10375,7 +10876,7 @@ const StoryboardWorker = (() => {
 		}
 		return worker;
 	};
-	const createView = async ({container, canvas, info, ratio, name, style}, type = 'thumbnail') => {
+	const createView = ({container, canvas, info, ratio, name, style}, type = 'thumbnail') => {
 		style = style || {};
 		ratio = ratio || window.devicePixelRatio || 1;
 		name = name || 'Storyboard';
@@ -10390,27 +10891,39 @@ const StoryboardWorker = (() => {
 			style.heightPx && (canvas.height = Math.max(style.heightPx));
 		}
 		canvas.dataset.name = name;
-		const worker = await initWorker();
+		canvas.classList.add('is-loading');
 		const layer = isOffscreenCanvasAvailable ? canvas.transferControlToOffscreen() : canvas;
-		const init = await worker.post(
-			{command:
-				type === 'thumbnail' ? 'createThumbnail' : 'createBoard',
-				params: {canvas: layer, info, style, name}},
-			{transfer: [layer]}
-		);
-		const id = init.id;
-		let currentTime = -1, scrollLeft = -1;
+		const promiseSetup = (async () => {
+			const worker = await initWorker();
+			const result = await worker.post(
+				{command:
+					type === 'thumbnail' ? 'createThumbnail' : 'createBoard',
+					params: {canvas: layer, info, style, name}},
+				{transfer: [layer]}
+			);
+			canvas.classList.remove('is-loading');
+			return result.id;
+		})();
+		let currentTime = -1, scrollLeft = -1, isAnimating = false;
+		const post = async ({command, params}, transfer = {}) => {
+			const id = await promiseSetup;
+			params = params || {};
+			params.id = id;
+			return worker.post({command, params}, transfer);
+		};
 		const result = {
 			container,
 			canvas,
 			setInfo(info) {
 				currentTime = -1;
 				scrollLeft = -1;
-				return worker.post({command: 'info', params: {id, info}});
+				canvas.classList.add('is-loading');
+				return post({command: 'info', params: {info}})
+					.then(() => canvas.classList.remove('is-loading'));
 			},
 			resize({width, height}) {
 				scrollLeft = -1;
-				return worker.post({command: 'resize', params: {id, width, height}});
+				return post({command: 'resize', params: {width, height}});
 			},
 			get scrollLeft() {
 				return scrollLeft;
@@ -10418,7 +10931,7 @@ const StoryboardWorker = (() => {
 			set scrollLeft(left) {
 				if (scrollLeft === left) { return; }
 				scrollLeft = left;
-				worker.post({command: 'scrollLeft', params: {id, scrollLeft}});
+				post({command: 'scrollLeft', params: {scrollLeft}});
 			},
 			get currentTime() {
 				return currentTime;
@@ -10426,10 +10939,24 @@ const StoryboardWorker = (() => {
 			set currentTime(time) {
 				if (currentTime === time) { return; }
 				currentTime = time;
-				worker.post({command: 'currentTime', params: {id, currentTime}});
+				post({command: 'currentTime', params: {currentTime}});
 			},
 			dispose() {
-				worker.post({command: 'dispose', params: {id}});
+				post({command: 'dispose', params: {}});
+			},
+			sharedMemory({MAP, buffer}) {
+				post({command: 'sharedMemory', params: {MAP, buffer}});
+			},
+			startAnimation() {
+				isAnimating = true;
+				post({command: 'startAnimation', params: {}});
+			},
+			stopAnimation() {
+				isAnimating = false;
+				post({command: 'stopAnimation', params: {}});
+			},
+			get isAnimating() {
+				return isAnimating;
 			}
 		};
 		return result;
@@ -10576,18 +11103,18 @@ class Storyboard extends Emitter {
 				fontSizePx: 12,
 				color: '#fff'
 			};
-			TextLabel.create({
+			this.currentTimeLabel = TextLabel.create({
 				container: $view.find('.currentTimeLabel')[0],
 				name: 'currentTimeLabel',
 				text: '00:00',
 				style: timeStyle
-			}).then(label => this.currentTimeLabel = label);
-			TextLabel.create({
+			});
+			this.durationLabel = TextLabel.create({
 				container: $view.find('.durationLabel')[0],
 				name: 'durationLabel',
 				text: '00:00',
 				style: timeStyle
-			}).then(label => this.durationLabel = label);
+			});
 			this._$seekBar
 				.on('mousedown', this._onSeekBarMouseDown.bind(this))
 				.on('mousemove', this._onSeekBarMouseMove.bind(this));
@@ -10596,7 +11123,7 @@ class Storyboard extends Emitter {
 				.on('command', this._onCommandEvent.bind(this));
 			HeatMapWorker.init({container: this._seekBar}).then(hm => this._heatMap = hm);
 			const updateHeatMapVisibility =
-				v => this._$seekBarContainer.toggleClass('noHeatMap', !v);
+				v => this._$seekBarContainer.raf.toggleClass('noHeatMap', !v);
 			updateHeatMapVisibility(this._playerConfig.props.enableHeatMap);
 			this._playerConfig.onkey('enableHeatMap', updateHeatMapVisibility);
 			global.emitter.on('heatMapUpdate', heatMap => {
@@ -10615,7 +11142,7 @@ class Storyboard extends Emitter {
 				$container: this._$seekBarContainer
 			});
 			const updateEnableCommentPreview = v => {
-				this._$seekBarContainer.toggleClass('enableCommentPreview', v);
+				this._$seekBarContainer.raf.toggleClass('enableCommentPreview', v);
 				this._commentPreview.mode = v ? 'list' : 'hover';
 			};
 			updateEnableCommentPreview(config.props.enableCommentPreview);
@@ -10657,11 +11184,11 @@ class Storyboard extends Emitter {
 			const updatePlaybackRate = rate => {
 				label.textContent = `x${rate}`;
 				$menu.find('.selected').removeClass('selected');
-				let fr = Math.floor( parseFloat(rate, 10) * 100) / 100;
+				const fr = Math.floor( parseFloat(rate, 10) * 100) / 100;
 				$rates.forEach(item => {
-					let r = parseFloat(item.dataset.param, 10);
+					const r = parseFloat(item.dataset.param, 10);
 					if (fr === r) {
-						item.classList.add('selected');
+						ClassList(item).add('selected');
 					}
 				});
 				this._pointer.playbackRate = rate;
@@ -10693,11 +11220,11 @@ class Storyboard extends Emitter {
 				$select.find('.select-dmc-' + value).addClass('selected');
 			};
 			const onVideoServerType = (type, videoSessionInfo) => {
-				$button.removeClass('is-smile-playing is-dmc-playing')
-					.addClass(`is-${type === 'dmc' ? 'dmc' : 'smile'}-playing`);
+				$button.raf.removeClass('is-smile-playing is-dmc-playing')
+					.raf.addClass(`is-${type === 'dmc' ? 'dmc' : 'smile'}-playing`);
 				$select.find('.serverType').removeClass('selected');
 				$select.find(`.select-server-${type === 'dmc' ? 'dmc' : 'smile'}`).addClass('selected');
-				$current.text(type !== 'dmc' ? '----' : videoSessionInfo.videoFormat.replace(/^.*h264_/, ''));
+				$current.raf.text(type !== 'dmc' ? '----' : videoSessionInfo.videoFormat.replace(/^.*h264_/, ''));
 			};
 			updateSmileVideoQuality(config.props.smileVideoQuality);
 			updateDmcVideoQuality(config.props.dmcVideoQuality);
@@ -10715,12 +11242,12 @@ class Storyboard extends Emitter {
 					window.console.log('start-seek-start');
 					this._isWheelSeeking = true;
 					this._wheelSeeker.currentTime = this._player.currentTime;
-					this._view.classList.add('is-wheelSeeking');
+					ClassList(this._view).add('is-wheelSeeking');
 					break;
 				case 'wheelSeek-end':
 					window.console.log('start-seek-end');
 					this._isWheelSeeking = false;
-					this._view.classList.remove('is-wheelSeeking');
+					ClassList(this._view).remove('is-wheelSeeking');
 					break;
 				case 'wheelSeek':
 					this._onWheelSeek(e.detail.param);
@@ -10818,8 +11345,8 @@ class Storyboard extends Emitter {
 			if (!this._isDragging) {
 				e.stopPropagation();
 			}
-			let left = e.offsetX;
-			let sec = this._posToTime(left);
+			const left = e.offsetX;
+			const sec = this._posToTime(left);
 			this._seekBarMouseX = left;
 			this._commentPreview.currentTime = sec;
 			this._commentPreview.update(left);
@@ -10840,12 +11367,12 @@ class Storyboard extends Emitter {
 		}
 		_beginMouseDrag() {
 			this._bindDragEvent();
-			this._$view.addClass('is-dragging');
+			ClassList(this._view).add('is-dragging');
 			this._isDragging = true;
 		}
 		_endMouseDrag() {
 			this._unbindDragEvent();
-			this._$view.removeClass('is-dragging');
+			ClassList(this._view).remove('is-dragging');
 			this._isDragging = false;
 		}
 		_onBodyMouseUp(e) {
@@ -10879,14 +11406,21 @@ class Storyboard extends Emitter {
 		}
 		_onLoadVideoInfo(videoInfo) {
 			this.duration = videoInfo.duration;
+			const [view] = this._$view;
 			if (!this._isFirstVideoInitialized) {
 				this._isFirstVideoInitialized = true;
 				const handler = (command, param) => this.emit('command', command, param);
 				global.emitter.emitAsync('videoControBar.addonMenuReady',
-					this._$view[0].querySelector('.controlItemContainer.left .scalingUI'), handler
+					view.querySelector('.controlItemContainer.left .scalingUI'), handler
 				);
 				global.emitter.emitAsync('seekBar.addonMenuReady',
-					this._$view[0].querySelector('.seekBar'), handler
+					view.querySelector('.seekBar'), handler
+				);
+				global.emitter.emitResolve('videoControBar.addonMenuReady',
+					{container: view.querySelector('.controlItemContainer.left .scalingUI'), handler}
+				);
+				global.emitter.emitResolve('seekBar.addonMenuReady',
+					{container: view.querySelector('.seekBar'), handler}
 				);
 			}
 			this._resumePointer.setAttribute('duration', videoInfo.duration);
@@ -10904,7 +11438,7 @@ class Storyboard extends Emitter {
 			const currentTimeText = util.secToTime(sec);
 			if (this._currentTimeText !== currentTimeText) {
 				this._currentTimeText = currentTimeText;
-				this.currentTimeLabel && (this.currentTimeLabel.text = currentTimeText);
+				this.currentTimeLabel.text = currentTimeText;
 			}
 			this._pointer.currentTime = sec;
 		}
@@ -10919,9 +11453,9 @@ class Storyboard extends Emitter {
 			this._wheelSeeker.duration = sec;
 			this._seekRange.max = sec;
 			if (sec === 0 || isNaN(sec)) {
-				this.durationLabel && (this.durationLabel.text = '--:--');
+				this.durationLabel.text = '--:--';
 			} else {
-				this.durationLabel && (this.durationLabel.text = util.secToTime(sec));
+				this.durationLabel.text = util.secToTime(sec);
 			}
 			this.emit('durationChange');
 		}
@@ -10940,8 +11474,10 @@ class Storyboard extends Emitter {
 								this._bufferEnd   !== end) {
 							const perLeft = (this._timeToPer(start) - 1);
 							const scaleX = (this._timeToPer(width) + 2) / 100;
-							bufferRange.style.setProperty('--buffer-range-left', cssUtil.percent(perLeft));
-							bufferRange.style.setProperty('--buffer-range-scale', scaleX);
+							cssUtil.setProps(
+								[bufferRange, '--buffer-range-left', cssUtil.percent(perLeft)],
+								[bufferRange, '--buffer-range-scale', scaleX]
+							);
 							this._bufferStart = start;
 							this._bufferEnd   = end;
 						}
@@ -10953,7 +11489,7 @@ class Storyboard extends Emitter {
 		resetBufferedRange() {
 			this._bufferStart = 0;
 			this._bufferEnd = 0;
-			this._bufferRange.style.setProperty('--buffer-range-scale', 0);
+			cssUtil.setProps([this._bufferRange, '--buffer-range-scale', 0]);
 		}
 		_hideMenu() {
 			document.body.focus();
@@ -12452,17 +12988,18 @@ const HeatMap = HeatMapInitFunc({
 			}
 			const width = this._mode === 'list' ?
 				CommentPreviewView.WIDTH : CommentPreviewView.HOVER_WIDTH;
-			const containerWidth = window.innerWidth;
+			const containerWidth = this._innerWidth = this._innerWidth || window.innerWidth;
 			left = Math.min(Math.max(0, left - CommentPreviewView.WIDTH / 2), containerWidth - width);
 			this._left = left;
 			this.applyView();
 		}
 		applyView() {
 			const view = this._view;
-			const vs = view.style;
-			vs.setProperty('--current-time', cssUtil.s(this._currentTime));
-			vs.setProperty('--scroll-top', cssUtil.px(this._scrollTop));
-			vs.setProperty('--trans-x-pp', cssUtil.px(this._left));
+			cssUtil.setProps(
+				[view, '--current-time', cssUtil.s(this._currentTime)],
+				[view, '--scroll-top', cssUtil.px(this._scrollTop)],
+				[view, '--trans-x-pp', cssUtil.px(this._left)]
+			);
 			if (this._newListElements && this._newListElements.childElementCount) {
 				this._list.append(this._newListElements);
 			}
@@ -12782,7 +13319,7 @@ util.addStyle(`
 			util.addStyle(SeekBarToolTip.__css__);
 			const $view = this._$view = util.$.html(SeekBarToolTip.__tpl__);
 			this._currentTime = $view.find('.currentTime')[0];
-			TextLabel.create({
+			this.currentTimeLabel = TextLabel.create({
 				container: this._currentTime,
 				name: 'currentTimeLabel',
 				text: '00:00',
@@ -12794,7 +13331,7 @@ util.addStyle(`
 					fontSizePx: 12,
 					color: '#ccc'
 				}
-			}).then(label => this.currentTimeLabel = label);
+			});
 			$view
 				.on('mousedown',this._onMouseDown.bind(this))
 				.on('click', e => { e.stopPropagation(); e.preventDefault(); });
@@ -12857,9 +13394,9 @@ util.addStyle(`
 			this._timeText = timeText;
 			this.currentTimeLabel && (this.currentTimeLabel.text = timeText);
 			const w  = this.offsetWidth = this.offsetWidth || this._$view[0].offsetWidth;
-			const vw = window.innerWidth;
+			const vw = this._innerWidth = this._innerWidth || window.innerWidth;
 			left = Math.max(0, Math.min(left - w / 2, vw - w));
-			this._$view[0].style.setProperty('--trans-x-pp', cssUtil.px(left));
+			cssUtil.setProps([this._$view[0], '--trans-x-pp', cssUtil.px(left)]);
 			this._seekBarThumbnail.currentTime = sec;
 		}
 	}
@@ -12882,8 +13419,8 @@ util.addStyle(`
 			border: 1px solid #666;
 			border-radius: 8px;
 			padding: 8px 4px 0;
-			transform: translate3d(var(--trans-x-pp), 0, 10px);
-			transition: --trans-x-pp 0.1s, opacity 0.2s ease 0.5s;
+			will-change: transform;
+			transform: translate(var(--trans-x-pp), 0);
 			pointer-events: none;
 		}
 		.is-wheelSeeking .seekBarToolTip,
@@ -12972,7 +13509,7 @@ util.addStyle(`
 			this._isPausing = true;
 			this._isSeeking = false;
 			this._isStalled = false;
-			if (!this._pointer.animate && !('registerProperty' in CSS)) {
+			if (!this._pointer.animate || !('registerProperty' in CSS)) {
 				this._isSmoothMode = false;
 			}
 			this._pointer.classList.toggle('is-notSmooth', !this._isSmoothMode);
@@ -12986,7 +13523,7 @@ util.addStyle(`
 		set currentTime(v) {
 			if (!this._isSmoothMode) {
 				const per = Math.min(100, this._timeToPer(v));
-				this._pointer.style.setProperty('--trans-x-pp', cssUtil.vw(per));
+				this._pointer.style.transform = `translate3d(${per}vw, 0, 0) translate3d(-50%, -50%, 0)`;
 				return;
 			}
 			if (document.hidden) { return; }
@@ -14537,6 +15074,7 @@ class NicoChatCss3View {
 			position: absolute;
 			will-change: transform;
 			contain: layout style paint;
+			visibility: hidden;
 			line-height: 1.235;
 			z-index: ${zIndex};
 			top: ${top};
@@ -14545,14 +15083,12 @@ class NicoChatCss3View {
 			${lineHeightCss}
 			${opacity}
 			font-size: ${fontSizePx}px;
-			animation-name: ${(isAlignMiddle || isScaled) ? 'idou-props-scale' : 'idou-props'};
+			animation-name: idou-props${(isScaled || isAlignMiddle) ? '-scaled' : ''}${isAlignMiddle ? '-middle' : ''};
 			animation-duration: ${duration}s;
 			animation-delay: ${delay}s;
 			${reverse}
 			transform:
 				translateX(0)
-				${isScaled ? 'scale(var(--chat-scale-x), var(--chat-scale-y))' : ''}
-				${isAlignMiddle ? 'translateY(var(--chat-trans-y))' : ''}
 				;
 		`;
 		return {inline, keyframes: ''};
@@ -15820,8 +16356,8 @@ class NicoCommentCss3PlayerView extends Emitter {
 		this._lastCurrentTime = 0;
 		this._isShow = true;
 		this._aspectRatio = 9 / 16;
-		this._inViewTable = new Map();
-		this._inSlotTable = new Map();
+		this._inViewTable = new Set();
+		this._inSlotTable = new Set();
 		this._domTable = new Map();
 		this._playbackRate = params.playbackRate || 1.0;
 		this._isPaused = undefined;
@@ -15876,8 +16412,8 @@ class NicoCommentCss3PlayerView extends Emitter {
 			}
 			cssUtil.registerProps(
 				{name: '--dokaben-scale', syntax: '<number>', initialValue: 1, inherits: true, window: win},
-				{name: '--chat-trans-x', syntax: '<length-percentage>', initialValue: '0px',  inherits: false, window: win},
-				{name: '--chat-trans-y', syntax: '<length-percentage>', initialValue: '-50%', inherits: false, window: win},
+				{name: '--chat-trans-x', syntax: '<length-percentage>', initialValue: 0,  inherits: false, window: win},
+				{name: '--chat-trans-y', syntax: '<length-percentage>', initialValue: 0, inherits: false, window: win},
 				{name: '--chat-scale-x', syntax: '<number>', initialValue: 1, inherits: false, window: win},
 				{name: '--chat-scale-y', syntax: '<number>', initialValue: 1, inherits: false, window: win},
 				{name: '--layer-scale',  syntax: '<number>', initialValue: 1, inherits: false, window: win}
@@ -15885,17 +16421,18 @@ class NicoCommentCss3PlayerView extends Emitter {
 			this.window = win;
 			this.document = doc;
 			this.fragment = doc.createDocumentFragment();
-			this._gcFragment = doc.createElement('div');
-			this._gcFragment.hidden = true;
+			this.subFragment = doc.createDocumentFragment();
+			this.removingElements = win.Array();
+			this.gcFragment = doc.createElement('div');
+			this.gcFragment.hidden = true;
 			this._optionStyle = doc.getElementById('optionCss');
 			this._style = doc.getElementById('nicoChatAnimationDefinition');
-			this._keyframesContainer = doc.getElementById('keyframesContainer');
 			const commentLayer = this.commentLayer = doc.getElementById('commentLayer');
 			const subLayer = this.subLayer = doc.createElement('div');
 			subLayer.className = 'subLayer';
 			commentLayer.append(subLayer);
-			doc.body.classList.toggle('debug', Config.props.debug);
-			Config.onkey('debug', v => doc.body.classList.toggle('debug', v));
+			ClassList(doc.body).toggle('debug', Config.props.debug);
+			Config.onkey('debug', v => ClassList(doc.body).toggle('debug', v));
 			NicoComment.offscreenLayer.get().then(layer => { this._optionStyle.innerHTML = layer.optionCss; });
 			global.emitter.on('updateOptionCss', newCss => {
 				this._optionStyle.innerHTML = newCss;
@@ -15926,9 +16463,10 @@ class NicoCommentCss3PlayerView extends Emitter {
 			}
 			const updateTextShadow = type => {
 				const types = ['shadow-type2', 'shadow-type3', 'shadow-stroke', 'shadow-dokaben'];
-				types.forEach(t => doc.body.classList.toggle(t, t === type));
+				const cl = ClassList(doc.body);
+				types.forEach(t => cl.toggle(t, t === type));
 			};
-			updateTextShadow(this._config.getValue('textShadowType'));
+			updateTextShadow(this._config.props.textShadowType);
 			this._config.onkey('textShadowType', _.debounce(updateTextShadow, 100));
 			window.console.timeEnd('initialize NicoCommentCss3PlayerView');
 		};
@@ -15956,7 +16494,7 @@ class NicoCommentCss3PlayerView extends Emitter {
 		}
 	}
 	_getIframe () {
-		let reserved = document.getElementsByClassName('reservedFrame');
+		const reserved = document.getElementsByClassName('reservedFrame');
 		let iframe;
 		if (reserved && reserved.length > 0) {
 			iframe = reserved[0];
@@ -16010,7 +16548,7 @@ class NicoCommentCss3PlayerView extends Emitter {
 		this.clear();
 	}
 	_onCurrentTime (sec) {
-		let REFRESH_THRESHOLD = 1;
+		const REFRESH_THRESHOLD = 1;
 		this._lastCurrentTime = this._currentTime;
 		this._currentTime = sec;
 		if (this._lastCurrentTime === this._currentTime) {
@@ -16029,13 +16567,13 @@ class NicoCommentCss3PlayerView extends Emitter {
 		if (!this.commentLayer) {
 			return;
 		}
-		this.commentLayer.classList.add(name);
+		ClassList(this.commentLayer).add(name);
 	}
 	_removeClass (name) {
 		if (!this.commentLayer) {
 			return;
 		}
-		this.commentLayer.classList.remove(name);
+		ClassList(this.commentLayer).remove(name);
 	}
 	_setStall (v) {
 		if (v) {
@@ -16061,9 +16599,9 @@ class NicoCommentCss3PlayerView extends Emitter {
 			this.commentLayer.textContent = '';
 			this.subLayer.textContent = '';
 			this.commentLayer.append(this.subLayer);
-			this._gcFragment.textContent = '';
-			this._keyframesContainer.textContent = '';
+			this.gcFragment.textContent = '';
 			this.fragment.textContent = '';
+			this.subFragment.textContent = '';
 		}
 		if (this._style) {
 			this._style.textContent = '';
@@ -16086,96 +16624,76 @@ class NicoCommentCss3PlayerView extends Emitter {
 			vm.getGroup(NicoChat.TYPE.BOTTOM).inViewMembers,
 			vm.getGroup(NicoChat.TYPE.TOP).inViewMembers
 		].flat();
-		const css = [], dom = [], subDom = [];
+		const dom = [], subDom = [], newView = [];
+		const inSlotTable = this._inSlotTable, inViewTable = this._inViewTable;
 		const ct = this._currentTime;
-		const newView = [];
 		for (let i = 0, len = inView.length; i < len; i++) {
 			const nicoChat = inView[i];
-			const domId = nicoChat.id;
-			if (this._inViewTable.has(domId)) {
+			if (inViewTable.has(nicoChat)) {
 				continue;
 			}
-			this._inViewTable.set(domId, nicoChat);
-			this._inSlotTable.set(domId, nicoChat);
+			inViewTable.add(nicoChat);
+			inSlotTable.add(nicoChat);
 			newView.push(nicoChat);
 		}
 		if (newView.length > 1) {
 			newView.sort(NicoChat.SORT_FUNCTION);
 		}
+		const doc = this.document, playbackRate = this._playbackRate;
+		const domTable = this._domTable;
 		for (let i = 0, len = newView.length; i < len; i++) {
 			const nicoChat = newView[i];
 			const type = nicoChat.type;
 			const size = nicoChat.size;
-			const cssText = NicoChatCss3View.buildChatCss(nicoChat, type, ct, this._playbackRate);
-			const element = NicoChatCss3View.buildChatDom(nicoChat, type, size, cssText, this.document);
-			this._domTable.set(nicoChat.id, element);
+			const cssText = NicoChatCss3View.buildChatCss(nicoChat, type, ct, playbackRate);
+			const element = NicoChatCss3View.buildChatDom(nicoChat, type, size, cssText, doc);
+			domTable.set(nicoChat, element);
 			(nicoChat.isSubThread ? subDom : dom).push(element);
 		}
-		if (newView.length > 0) {
-			const inSlotTable = this._inSlotTable, currentTime = this._currentTime;
-			const outViewIds = [];
-			const margin = 2 / NicoChatViewModel.SPEED_RATE;
-			for (const key of inSlotTable.keys()) {
-				const chat = inSlotTable.get(key);
-				if (currentTime - margin < chat.endRightTiming) {
-					continue;
-				}
-				inSlotTable.delete(key);
-				outViewIds.push(key);
-			}
-			this._updateDom(dom, subDom, css, outViewIds);
-		}
-	}
-	_updateDom(dom, subDom, css, outViewIds) {
-		const fragment = this.fragment;
-		if (dom.length) {
-			fragment.append(...dom);
-			this.commentLayer.append(fragment);
-		}
-		if (subDom.length) {
-			fragment.append(...subDom);
-			this.subLayer.append(fragment);
-		}
-		this._removeOutviewElements(outViewIds);
-		this._gcInviewElements();
-	}
-	/*
-	* アニメーションが終わっているはずの要素を除去
-	*/
-	_removeOutviewElements(outViewIds) {
-		if (!this.document || !outViewIds.length) {
+		if (!newView.length) {
 			return;
 		}
-		const dt = this._domTable;
-		const elements = [];
-		for (const id of outViewIds) {
-			const elm = dt.get(id);
-			elm && (elements.push(elm));
+		dom.length    && this.fragment.append(...dom);
+		subDom.length && this.subFragment.append(...subDom);
+		const currentTime = this._currentTime;
+		const margin = 2 / NicoChatViewModel.SPEED_RATE;
+		for (const nicoChat of inSlotTable) {
+			if (currentTime - margin < nicoChat.endRightTiming) {
+				continue;
+			}
+			const elm = domTable.get(nicoChat);
+			elm && this.removingElements.push(elm);
+			inSlotTable.delete(nicoChat);
 		}
-		if (elements.length < 1) { return; }
-		const fragment = this.fragment;
-		fragment.append(...elements);
-		this._gcFragment.append(fragment);
+		this._updateDom(dom, subDom);
+	}
+	_updateDom() {
+		this._gcInviewElements();
+		if (this.removingElements.length) {
+			this.gcFragment.append(...this.removingElements);
+			this.removingElements.length = 0;
+		}
+		if (this.fragment.firstElementChild) {
+			this.commentLayer.append(this.fragment);
+		}
+		if (this.subFragment.firstElementChild) {
+			this.subLayer.append(this.subFragment);
+		}
 	}
 	/*
 	* 古い順に要素を除去していく
 	*/
-	_gcInviewElements (/*outViewIds*/) {
+	_gcInviewElements () {
 		if (!this.commentLayer || !this._style) {
 			return;
 		}
 		const max = NicoCommentCss3PlayerView.MAX_DISPLAY_COMMENT;
 		const commentLayer = this.commentLayer;
-		let inViewElements;
-		const elements = [];
-		inViewElements = this.window.Array.from(commentLayer.querySelectorAll('.nicoChat.fork0'));
+		const elements = this.removingElements;
+		const inViewElements = this.window.Array.from(commentLayer.querySelectorAll('.nicoChat.fork0'));
 		for (let i = inViewElements.length - max - 1; i >= 0; i--) {
 			elements.push(inViewElements[i]);
 		}
-		if (elements.length < 1) { return; }
-		const fragment = this.fragment;
-		fragment.append(...elements);
-		this._gcFragment.append(fragment);
 	}
 	buildHtml (currentTime) {
 		window.console.time('buildHtml');
@@ -16200,19 +16718,19 @@ class NicoCommentCss3PlayerView extends Emitter {
 	_buildGroupHtml (m, currentTime = 0) {
 		const result = [];
 		for (let i = 0, len = m.length; i < len; i++) {
-			let chat = m[i];
-			let type = chat.type;
-			let cssText = NicoChatCss3View.buildChatCss(chat, type, currentTime);
-			let element = NicoChatCss3View.buildChatHtml(chat, type, cssText, this.document);
+			const chat = m[i];
+			const type = chat.type;
+			const cssText = NicoChatCss3View.buildChatCss(chat, type, currentTime);
+			const element = NicoChatCss3View.buildChatHtml(chat, type, cssText, this.document);
 			result.push(element);
 		}
 		return result.join('\n');
 	}
 	_buildGroupCss (m, currentTime) {
-		let result = [];
+		const result = [];
 		for (let i = 0, len = m.length; i < len; i++) {
-			let chat = m[i];
-			let type = chat.type;
+			const chat = m[i];
+			const type = chat.type;
 			result.push(NicoChatCss3View.buildChatCss(chat, type, currentTime));
 		}
 		return result.join('\n');
@@ -16222,7 +16740,6 @@ class NicoCommentCss3PlayerView extends Emitter {
 			this._isShow = true;
 			this.refresh();
 		}
-		console.log('show!');
 	}
 	hide () {
 		this.clear();
@@ -16315,7 +16832,7 @@ class NicoCommentCss3PlayerView extends Emitter {
 NicoCommentCss3PlayerView.MAX_DISPLAY_COMMENT = 40;
 /* eslint-disable */
 NicoCommentCss3PlayerView.__TPL__ = ((Config) => {
-	let ownerShadowColor = Config.getValue('commentLayer.ownerCommentShadowColor');
+	let ownerShadowColor = Config.props['commentLayer.ownerCommentShadowColor'];
 	ownerShadowColor = ownerShadowColor.replace(/([^a-z^0-9^#])/ig, '');
 	let textShadowColor = '#000';
 	let textShadowColor2 = '#fff';
@@ -16381,15 +16898,6 @@ body.in-capture .commentLayer {
 		transform: translate3d(-50%, 0, 0) perspective(200px) rotateX(90deg) scale(var(--dokaben-scale));
 	}
 }
-@keyframes idou-var {
-	0%   {
-		visibility: visible;
-		transform: var(--transform-start);
-	}
-	100% {
-		transform: var(--transform-end);
-	}
-}
 @keyframes idou-props {
 	0%   {
 		visibility: visible;
@@ -16400,7 +16908,21 @@ body.in-capture .commentLayer {
 		transform: translateX(var(--chat-trans-x));
 	}
 }
-@keyframes idou-props-scale {
+@keyframes idou-props-scaled {
+	0%   {
+		visibility: visible;
+		transform:
+			translateX(0)
+			scale(var(--chat-scale-x), var(--chat-scale-y));
+	}
+	100% {
+		visibility: hidden;
+		transform:
+			translateX(var(--chat-trans-x))
+			scale(var(--chat-scale-x), var(--chat-scale-y));
+	}
+}
+@keyframes idou-props-scaled-middle {
 	0%   {
 		visibility: visible;
 		transform:
@@ -17489,6 +18011,7 @@ class CommentListModel extends Emitter {
 		this._currentSortKey = 'vpos';
 		this._isDesc = false;
 		this._currentTime = 0;
+		this._currentIndex = -1;
 	}
 	setItem(itemList) {
 		this._items = Array.isArray(itemList) ? itemList : [itemList];
@@ -17497,12 +18020,13 @@ class CommentListModel extends Emitter {
 		this._items = [];
 		this._positions = [];
 		this._currentTime = 0;
+		this._currentIndex = -1;
 		this.emit('update', [], true);
 	}
 	setChatList(chatList) {
 		chatList = chatList.top.concat(chatList.naka, chatList.bottom);
-		let items = [];
-		let positions = [];
+		const items = [];
+		const positions = [];
 		for (let i = 0, len = chatList.length; i < len; i++) {
 			items.push(new CommentListItem(chatList[i]));
 			positions.push(parseFloat(chatList[i].vpos, 10) / 100);
@@ -17510,28 +18034,28 @@ class CommentListModel extends Emitter {
 		this._items = items;
 		this._positions = positions.sort((a, b) => a - b);
 		this._currentTime = 0;
+		this._currentIndex = -1;
 		this.sort();
 		this.emit('update', this._items, true);
 	}
 	removeItemByIndex(index) {
-		let target = this._getItemByIndex(index);
+		const target = this._getItemByIndex(index);
 		if (!target) {
 			return;
 		}
-		this._items = _.reject(this._items, item => item === target);
+		this._items = this._items.filter(item => item !== target);
 	}
-	getLength() {
+	get length() {
 		return this._items.length;
 	}
 	_getItemByIndex(index) {
-		let item = this._items[index];
-		return item;
+		return this._items[index];
 	}
 	indexOf(item) {
 		return (this._items || []).indexOf(item);
 	}
 	getItemByIndex(index) {
-		let item = this._getItemByIndex(index);
+		const item = this._getItemByIndex(index);
 		if (!item) {
 			return null;
 		}
@@ -17542,9 +18066,9 @@ class CommentListModel extends Emitter {
 		return this._items.find(item => item.itemId === itemId);
 	}
 	removeItem(item) {
-		let beforeLen = this._items.length;
-		_.pull(this._items, item);
-		let afterLen = this._items.length;
+		const beforeLen = this._items.length;
+		this._items = this._items.filter(i => i !== item); //_.pull(this._items, item);
+		const afterLen = this._items.length;
 		if (beforeLen !== afterLen) {
 			this.emit('update', this._items);
 		}
@@ -17560,7 +18084,7 @@ class CommentListModel extends Emitter {
 			user: 'userId',
 			nicoru: 'nicoru'
 		};
-		let func = table[key];
+		const func = table[key];
 		if (!func) {
 			return;
 		}
@@ -17575,7 +18099,7 @@ class CommentListModel extends Emitter {
 	sort() {
 		this.sortBy(this._currentSortKey, this._isDesc);
 	}
-	getCurrentSortKey() {
+	get currentSortKey() {
 		return this._currentSortKey;
 	}
 	onUpdate(replaceAll = false) {
@@ -17587,9 +18111,11 @@ class CommentListModel extends Emitter {
 	set currentTime(sec) {
 		if (this._currentTime !== sec && typeof sec === 'number') {
 			this._currentTime = sec;
-			if (this._currentSortKey === 'vpos') {
-				this.emit('currentTimeUpdate', sec, this.getInViewIndex(sec));
+			const inviewIndex = this.getInViewIndex(sec);
+			if (this._currentSortKey === 'vpos' && this._currentIndex !== inviewIndex) {
+				this.emit('currentTimeUpdate', sec, inviewIndex);
 			}
+			this._currentIndex = inviewIndex;
 		}
 	}
 	get currentTime() {return this._currentTime;}
@@ -17601,10 +18127,12 @@ class CommentListView extends Emitter {
 		this._itemCss = CommentListItemView.CSS;
 		this._className = params.className || 'commentList';
 		this._retryGetIframeCount = 0;
-		this._cache = {};
 		this._maxItems = 100000;
 		this._inviewItemList = new Map;
 		this._scrollTop = 0;
+		this.newItems = [];
+		this.removedItems = [];
+		this._innerHeight = 100;
 		this._model = params.model;
 		if (this._model) {
 			this._model.on('update', _.debounce(this._onModelUpdate.bind(this), 500));
@@ -17625,11 +18153,13 @@ class CommentListView extends Emitter {
 		const doc = this._document = w.document;
 		this._window = w;
 		const body = this._body = doc.body;
+		const classList = this.classList = ClassList(body);
 		const $body = this._$body = uq(body);
 		if (this._className) {
-			body.classList.add(this._className);
+			classList.add(this._className);
 		}
 		this._container = doc.querySelector('#listContainer');
+		this._$container = uq(this._container);
 		this._list = doc.getElementById('listContainerInner');
 		if (this._html) {
 			this._list.innerHTML = this._html;
@@ -17642,14 +18172,17 @@ class CommentListView extends Emitter {
 			.on('keydown', e => global.emitter.emit('keydown', e))
 			.on('keyup', e => global.emitter.emit('keyup', e))
 			.toggleClass('is-guest', !nicoUtil.isLogin())
-			.toggleClass('is-premium', nicoUtil.isPremium());
+			.toggleClass('is-premium', nicoUtil.isPremium())
+			.toggleClass('is-firefox', env.isFirefox());
 		this._$menu.on('click', this._onMenuClick.bind(this));
 		this._$itemDetail.on('click', this._onItemDetailClick.bind(this));
-		this._container.addEventListener('mouseover', this._onMouseOver.bind(this));
-		this._container.addEventListener('mouseleave', this._onMouseOut.bind(this));
-		this._container.addEventListener('wheel', this._onWheel.bind(this), {passive: true});
-		this._container.addEventListener('scroll', this._onScroll.bind(this), {passive: true});
-		this._debouncedOnScrollEnd = _.debounce(this._onScrollEnd.bind(this), 500);
+		this._onScroll = this._onScroll.bind(this);
+		this._onScrolling = _.throttle(this._onScrolling.bind(this), 100);
+		this._onScrollEnd = _.debounce(this._onScrollEnd.bind(this), 500);
+		this._container.addEventListener('scroll', this._onScroll, {passive: true});
+		this._$container.on('mouseover', this._onMouseOver.bind(this))
+			.on('mouseleave', this._onMouseOut.bind(this))
+			.on('wheel', _.throttle(this._onWheel.bind(this), 100), {passive: true});
 		w.addEventListener('resize', this._onResize.bind(this));
 		this._innerHeight = w.innerHeight;
 		this._refreshInviewElements = _.throttle(this._refreshInviewElements.bind(this), 100);
@@ -17665,36 +18198,32 @@ class CommentListView extends Emitter {
 			{name: '--trans-y-pp', syntax: '<length>', initialValue: cssUtil.px(0), inherits: true, window: w},
 			{name: '--vpos-time', syntax: '<time>', initialValue: cssUtil.s(0), inherits: true, window: w}
 		);
-		body.style.setProperty('--inner-height', this._innerHeight);
+		cssUtil.setProps([body,'--inner-height', this._innerHeight]);
 		this._debouncedOnItemClick = _.debounce(this._onItemClick.bind(this), 300);
 		global.debug.$commentList = uq(this._list);
 		global.debug.getCommentPanelItems = () =>
 			Array.from(doc.querySelectorAll('.commentListItem'));
 	}
-	_onModelUpdate(itemList, replaceAll) {
+	async _onModelUpdate(itemList, replaceAll) {
 		window.console.time('update commentlistView');
 		this.addClass('updating');
 		itemList = Array.isArray(itemList) ? itemList : [itemList];
 		this.isActive = false;
 		if (replaceAll) {
-			this._scrollTop = 0;
+			this._scrollTop = this._container ? this._container.scrollTop : 0;
 		}
 		const itemViews = itemList.map((item, i) =>
 			new this._ItemView({item: item, index: i, height: CommentListView.ITEM_HEIGHT})
 		);
 		this._itemViews = itemViews;
-		window.setTimeout(() => {
-			if (!this._list) { return; }
-			this._list.textContent = '';
-			this._body.style.setProperty('--list-height',
-					Math.max(CommentListView.ITEM_HEIGHT * itemViews.length + 100,
-					this._innerHeight)
-				);
-			this._inviewItemList.clear();
-			this._$menu.removeClass('show');
-			this._refreshInviewElements();
-			this.hideItemDetail();
-		}, 0);
+		await cssUtil.setProps([this._body, '--list-height',
+			Math.max(CommentListView.ITEM_HEIGHT * itemViews.length, this._innerHeight) + 100]);
+		if (!this._list) { return; }
+		this._list.textContent = '';
+		this._inviewItemList.clear();
+		this._$menu.removeClass('show');
+		this._refreshInviewElements();
+		this.hideItemDetail();
 		window.setTimeout(() => {
 			this.removeClass('updating');
 			this.emit('update');
@@ -17776,66 +18305,83 @@ class CommentListView extends Emitter {
 	}
 	_onWheel() {
 		this.isActive = true;
+		this.scrollTop();
 		this.addClass('is-active');
 	}
 	_onMouseOut() {
 		this.isActive = false;
+		this.scrollTop();
 		this.removeClass('is-active');
 	}
 	_onResize() {
 		this._innerHeight = this._window.innerHeight;
-		this._body.style.setProperty('--inner-height', this._innerHeight);
+		cssUtil.setProps([this._body, '--inner-height', this._innerHeight]);
+		this.scrollTop();
 		this._refreshInviewElements();
 	}
 	_onScroll() {
 		if (!this.hasClass('is-scrolling')) {
 			this.addClass('is-scrolling');
 		}
+		this._onScrolling();
+		this._onScrollEnd();
+	}
+	_onScrolling() {
+		this.scrollTop();
 		this._refreshInviewElements();
-		this._debouncedOnScrollEnd();
 	}
 	_onScrollEnd() {
 		this.removeClass('is-scrolling');
+		this.scrollTop();
 	}
 	_refreshInviewElements() {
 		if (!this._list) {
 			return;
 		}
 		const itemHeight = CommentListView.ITEM_HEIGHT;
-		const scrollTop = this._container.scrollTop;
+		const scrollTop = this._scrollTop;
 		const innerHeight = this._innerHeight;
 		const windowBottom = scrollTop + innerHeight;
 		const itemViews = this._itemViews;
 		const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - 10);
 		const endIndex = Math.min(itemViews.length, Math.floor(windowBottom / itemHeight) + 10);
-		const newItems = [], inviewItemList = this._inviewItemList;
+		let changed = 0;
+		const newItems = this.newItems, inviewItemList = this._inviewItemList;
 		for (let i = startIndex; i < endIndex; i++) {
 			if (inviewItemList.has(i) || !itemViews[i]) {
 				continue;
 			}
-			newItems.push(itemViews[i]);
+			changed++;
+			newItems.push(itemViews[i].viewElement);
 			inviewItemList.set(i, itemViews[i]);
 		}
-		if (!newItems.length) {
-			return;
-		}
+		const removedItems = this.removedItems;
 		for (const i of inviewItemList.keys()) {
 			if (i >= startIndex && i <= endIndex) {
 				continue;
 			}
-			inviewItemList.get(i).remove();
+			changed++;
+			removedItems.push(inviewItemList.get(i));
 			inviewItemList.delete(i);
 		}
-		this._newItems = this._newItems ? this._newItems.concat(newItems) : newItems;
+		if (changed < 1) {
+			return;
+		}
 		this._appendNewItems();
 	}
 	_appendNewItems() {
-		if (this._newItems) {
-			const f = this._appendFragment = this._appendFragment || document.createDocumentFragment();
-			f.append(...this._newItems.map(i => i.viewElement));
-			this._list.append(f);
+		if (this.removedItems.length) {
+			const f = this._gcFragment = this._gcFragment || document.createDocumentFragment();
+			f.append(...this.removedItems);
+			f.textContent = '';
+			this.removedItems.length = 0;
 		}
-		this._newItems = null;
+		if (this.newItems.length) {
+			const f = this._appendFragment = this._appendFragment || document.createDocumentFragment();
+			f.append(...this.newItems);
+			this._list.append(f);
+			this.newItems.length = 0;
+		}
 	}
 	_updatePerspective() {
 		const keys = Object.keys(this._inviewItemList);
@@ -17856,38 +18402,37 @@ class CommentListView extends Emitter {
 		this._list.style.transform = `translateZ(-${avr}px)`;
 	}
 	addClass(className) {
-		this.toggleClass(className, true);
+		this.classList.add(className);
 	}
 	removeClass(className) {
-		this.toggleClass(className, false);
+		this.classList.remove(className);
 	}
 	toggleClass(className, v) {
 		if (!this._body) {
 			return;
 		}
-		this._body.classList.toggle(className, v);
+		this.classList.toggle(className, v);
 	}
 	hasClass(className) {
-		return this._body.classList.contains(className);
+		return this.classList.contains(className);
 	}
 	find(query) {
 		return this._document.querySelectorAll(query);
 	}
 	scrollTop(v) {
 		if (!this._window) {
-			return 0;
+			return;
 		}
 		if (typeof v === 'number') {
-			this._scrollTop = v;
-			this._container.scrollTop = v;
-			this._body.style.setProperty('--scroll-top', v);
+			this._container.scrollTop = this._scrollTop = v;
 		} else {
 			this._scrollTop = this._container.scrollTop;
-			this._body.style.setProperty('--scroll-top', this._scrollTop);
-			return this._scrollTop;
+			cssUtil.setProps(
+				[this._body, '--scroll-top', this._scrollTop]
+			);
 		}
 	}
-	setCurrentPoint(sec, idx) {
+	setCurrentPoint(sec, idx, isAutoScroll) {
 		if (!this._window || !this._itemViews) {
 			return;
 		}
@@ -17900,13 +18445,13 @@ class CommentListView extends Emitter {
 		}
 		const itemHeight = CommentListView.ITEM_HEIGHT;
 		const top = Math.max(0, view.top - innerHeight + itemHeight);
-		this._body.style.setProperty('--time-scroll-top', top);
-		if (!this.isActive) {
+		cssUtil.setProps(
+			[this._body, '--time-scroll-top', top],
+			[this._body, '--current-time', css.s(sec)]
+		);
+		if (!this.isActive && isAutoScroll) {
 				this.scrollTop(top);
 		}
-		requestAnimationFrame(() => {
-			this._body.style.setProperty('--current-time', css.s(sec));
-		});
 	}
 	showItemDetail(item) {
 		const $d = this._$itemDetail;
@@ -17948,6 +18493,18 @@ CommentListView.__tpl__ = (`
 	body.is-scrolling #listContainerInner *{
 		pointer-events: none;
 	}
+	.is-firefox .virtualScrollBarContainer {
+		content: '';
+		position: fixed;
+		top: 0;
+		right: 0;
+		width: 16px;
+		height: 100vh;
+		background: rgba(0, 0, 0, 0.6);
+		z-index: 100;
+		contain: strict;
+		pointer-events: none;
+	}
 	#listContainer {
 		position: absolute;
 		top: -1px;
@@ -17956,10 +18513,15 @@ CommentListView.__tpl__ = (`
 		padding: 0;
 		width: 100vw;
 		height: 100vh;
-		overflow: auto;
+		overflow-y: scroll;
+		overflow-x: hidden;
 		overscroll-behavior: contain;
 		will-change: transform;
 		scrollbar-width: 16px;
+		scrollbar-color: #039393;
+	}
+	.is-firefox #listContainer {
+		will-change: auto;
 	}
 	#listContainerInner {
 		height: calc(var(--list-height) * 1px);
@@ -18084,23 +18646,25 @@ CommentListView.__tpl__ = (`
 		margin: auto;
 		user-select: none;
 	}
+	.is-firefox .timeBar { display: none !important; }
 	.timeBar {
 		position: fixed;
 		visibility: hidden;
-		z-index: 100;
+		z-index: 110;
 		right: 0;
 		top: 1px;
 		width: 14px;
-		--height-pp: calc( 1px * var(--inner-height) * var(--inner-height) / var(--list-height) );
-		--trans-y-pp: calc( 1px * var(--inner-height) * var(--time-scroll-top) / var(--list-height) - 2px);
+		--height-pp:  calc(1px * var(--inner-height) * var(--inner-height) / var(--list-height));
+		--trans-y-pp: calc(1px * var(--inner-height) * var(--time-scroll-top) / var(--list-height));
+		min-height: 10px;
 		height: var(--height-pp);
-		min-height: 16px;
 		max-height: 100vh;
 		transform: translateY(var(--trans-y-pp));
 		transition: transform 0.2s;
 		pointer-events: none;
 		will-change: transform;
-		border: 1px solid #e12885;/*#FC6c6c;*/
+		border: 1px dashed #e12885;
+		opacity: 0.8;
 	}
 	.timeBar::after {
 		width: calc(100% + 6px);
@@ -18117,6 +18681,26 @@ CommentListView.__tpl__ = (`
 	body:hover .timeBar {
 		visibility: visible;
 	}
+	.virtualScrollBar {
+		display: none;
+	}
+	/*.is-firefox .virtualScrollBar {
+		display: inline-block;
+		position: fixed;
+		z-index: 100;
+		right: 0;
+		top: 0px;
+		width: 16px;
+		--height-pp: calc( 1px * var(--inner-height) * var(--inner-height) / var(--list-height) );
+		--trans-y-pp: calc( 1px * var(--inner-height) * var(--scroll-top) / var(--list-height));
+		height: var(--height-pp);
+		background: #039393;
+		max-height: 100vh;
+		transform: translateY(var(--trans-y-pp));
+		pointer-events: none;
+		will-change: transform;
+		z-index: 110;
+	}*/
 </style>
 <style id="listItemStyle">%CSS%</style>
 <body class="zenzaRoot">
@@ -18129,7 +18713,7 @@ CommentListView.__tpl__ = (`
 		<div class="text"></div>
 		<div class="command close" data-command="hideItemDetail">O K</div>
 	</div>
-	<div class="timeBar"></div>
+	<div class="virtualScrollBarContainer"><div class="virtualScrollBar"></div></div><div class="timeBar"></div>
 	<div id="listContainer">
 		<div class="listMenu">
 			<span class="menuButton itemDetailRequest"
@@ -18206,6 +18790,7 @@ const CommentListItemView = (() => {
 			.commentListItem {
 				position: absolute;
 				display: inline-block;
+				will-change: transform;
 				width: 100%;
 				height: 40px;
 				line-height: 20px;
@@ -18215,7 +18800,12 @@ const CommentListItemView = (() => {
 				padding: 0;
 				background: #222;
 				z-index: 50;
-				contain: layout style paint;
+				contain: strict;
+			}
+			.is-firefox .commentListItem {
+				contain: layout !important;
+				width: calc(100vw - 16px);
+				will-change: auto;
 			}
 			.is-active .commentListItem {
 				pointer-events: auto;
@@ -18238,7 +18828,6 @@ const CommentListItemView = (() => {
 				color: #ccc;
 				font-size: 12px;
 				left: 80px;
-				/* font-family: cursive; */
 			}
 			.commentListItem .nicoru-icon {
 				position: absolute;
@@ -18313,6 +18902,7 @@ const CommentListItemView = (() => {
 				z-index: 60;
 				height: auto;
 				box-shadow: 2px 2px 2px #000, 2px -2px 2px #000;
+				contain: layout style paint;
 			}
 			.is-active .commentListItem:hover .text {
 				white-space: normal;
@@ -18328,14 +18918,6 @@ const CommentListItemView = (() => {
 			.commentListItem.fork2 .text,
 			.commentListItem.fork1 .text {
 				font-weight: bolder;
-			}
-			.begin ~ .commentListItem .text {
-				color: #ffe;
-				font-weight: bolder;
-			}
-			.end ~ .commentListItem .text {
-				color: #ccc;
-				font-weight: normal;
 			}
 			.commentListItem.subThread {
 				opacity: 0.6;
@@ -18379,7 +18961,7 @@ const CommentListItemView = (() => {
 					<span class="timepos"></span>&nbsp;&nbsp;<span class="date"></span>
 				</p>
 				<p class="text"></p>
-				<span class="progress-negi" style="position: absolute; will-change: transform; contain: paint layout style size;"></span>
+				<span class="progress-negi" style="position: absolute; will-change: transform; contain: strict;"></span>
 			</div>
 		`).trim();
 	let counter = 0;
@@ -18390,7 +18972,6 @@ const CommentListItemView = (() => {
 				const t = document.createElement('template');
 				t.id = 'CommentListItemView-template' + Date.now();
 				t.innerHTML = TPL;
-				document.body.append(t);
 				template = {
 					t,
 					clone: () => {
@@ -18548,17 +19129,17 @@ CommentListItem._itemId = 0;
 class CommentPanelView extends Emitter {
 	constructor(params) {
 		super();
-		this._$container = params.$container;
-		this._model = params.model;
-		this._commentPanel = params.commentPanel;
+		this.$container = params.$container;
+		this.model = params.model;
+		this.commentPanel = params.commentPanel;
 		css.addStyle(CommentPanelView.__css__);
-		let $view = this._$view = uq.html(CommentPanelView.__tpl__);
-		this._$container.append($view);
-		const $menu = this._$menu = this._$view.find('.commentPanel-menu');
+		const $view = this.$view = uq.html(CommentPanelView.__tpl__);
+		this.$container.append($view);
+		const $menu = this._$menu = this.$view.find('.commentPanel-menu');
 		global.debug.commentPanelView = this;
-		let listView = this._listView = new CommentListView({
-			container: this._$view.find('.commentPanel-frame')[0],
-			model: this._model,
+		const listView = this._listView = new CommentListView({
+			container: this.$view.find('.commentPanel-frame')[0],
+			model: this.model,
 			className: 'commentList',
 			builder: CommentListItemView,
 			itemCss: CommentListItemView.__css__
@@ -18568,27 +19149,26 @@ class CommentPanelView extends Emitter {
 			parentNode: document.querySelector('.timeMachineContainer')
 		});
 		this._timeMachineView.on('command', this._onCommand.bind(this));
-		this._commentPanel.on('threadInfo',
+		this.commentPanel.on('threadInfo',
 			_.debounce(this._onThreadInfo.bind(this), 100));
-		this._commentPanel.on('update',
+		this.commentPanel.on('update',
 			_.debounce(this._onCommentPanelStatusUpdate.bind(this), 100));
-		this._commentPanel.on('itemDetailResp',
+		this.commentPanel.on('itemDetailResp',
 			_.debounce(item => listView.showItemDetail(item), 100));
 		this._onCommentPanelStatusUpdate();
-		this._model.on('currentTimeUpdate', this._onModelCurrentTimeUpdate.bind(this));
-		this._$view.on('click', this._onCommentListCommandClick.bind(this));
+		this.model.on('currentTimeUpdate', this._onModelCurrentTimeUpdate.bind(this));
+		this.$view.on('click', this._onCommentListCommandClick.bind(this));
 		global.emitter.on('hideHover', () => $menu.removeClass('show'));
 	}
 	toggleClass(className, v) {
-		this._view.toggleClass(className, v);
-		this._$view.toggleClass(className, v);
+		this.$view.raf.toggleClass(className, v);
 	}
 	_onModelCurrentTimeUpdate(sec, viewIndex) {
-		if (!this._$view){ //} || !this._$view.is(':visible')) {
+		if (!this.$view){
 			return;
 		}
 		this._lastCurrentTime = sec;
-		this._listView.setCurrentPoint(sec, viewIndex);
+		this._listView.setCurrentPoint(sec, viewIndex, this.commentPanel.isAutoScroll);
 	}
 	_onCommand(command, param, itemId) {
 		switch (command) {
@@ -18609,10 +19189,10 @@ class CommentPanelView extends Emitter {
 		if (!command) {
 			return;
 		}
-		const $view = this._$view;
+		const $view = this.$view;
 		const setUpdating = () => {
 			document.activeElement.blur();
-			$view.addClass('updating');
+			$view.raf.addClass('updating');
 			window.setTimeout(() => $view.removeClass('updating'), 1000);
 		};
 		switch (command) {
@@ -18633,12 +19213,11 @@ class CommentPanelView extends Emitter {
 		this._timeMachineView.update(threadInfo);
 	}
 	_onCommentPanelStatusUpdate() {
-		const commentPanel = this._commentPanel;
-		const $view = this._$view
-			.toggleClass('autoScroll', commentPanel.isAutoScroll);
+		const commentPanel = this.commentPanel;
+		const $view = this.$view.raf.toggleClass('autoScroll', commentPanel.isAutoScroll);
 		const langClass = `lang-${commentPanel.getLanguage()}`;
 		if (!$view.hasClass(langClass)) {
-			$view.removeClass('lang-ja_JP lang-en_US lang-zh_TW').addClass(langClass);
+			$view.raf.removeClass('lang-ja_JP lang-en_US lang-zh_TW').addClass(langClass);
 		}
 	}
 }
@@ -18926,7 +19505,7 @@ class CommentPanel extends Emitter {
 		}
 	}
 	set currentTime(sec) {
-		if (!this._view || !this._autoScroll || this._player.currentTab !== 'comment') {
+		if (!this._view || this._player.currentTab !== 'comment') {
 			return;
 		}
 		this._model.currentTime = sec;
@@ -19020,10 +19599,8 @@ class TimeMachineView extends BaseViewComponent {
 		this._updateTimestamp();
 	}
 	_padTime(time) {
-		let pad = v => {
-			return v.toString().padStart(2, '0');
-		};
-		let dt = new Date(time);
+		const pad = v => v.toString().padStart(2, '0');
+		const dt = new Date(time);
 		return {
 			yyyy: dt.getFullYear(),
 			mm: pad(dt.getMonth() + 1),
@@ -19034,11 +19611,11 @@ class TimeMachineView extends BaseViewComponent {
 		};
 	}
 	_toDate(time) {
-		let {yyyy, mm, dd, h, m} = this._padTime(time);
+		const {yyyy, mm, dd, h, m} = this._padTime(time);
 		return `${yyyy}/${mm}/${dd} ${h}:${m}`;
 	}
 	_toTDate(time) {
-		let {yyyy, mm, dd, h, m, s} = this._padTime(time);
+		const {yyyy, mm, dd, h, m, s} = this._padTime(time);
 		return `${yyyy}-${mm}-${dd}T${h}:${m}:${s}`;
 	}
 	_onSubmit() {
@@ -19254,33 +19831,23 @@ class VideoListModel extends Emitter {
 		if (!item) {
 			return;
 		}
-		this._items = this._items.filter(i => {
-			return i !== item;
-		});
+		this._items = this._items.filter(i => i !== item);
 	}
 	removePlayedItem() {
 		const beforeLen = this._items.length;
-		this._items = this._items.filter(item => {
-			return item.isActive || !item.isPlayed;
-		});
+		this._items = this._items.filter(item => item.isActive || !item.isPlayed);
 		const afterLen = this._items.length;
 		if (beforeLen !== afterLen) {
 			this.emit('update', this._items);
 		}
 	}
 	resetPlayedItemFlag() {
-		this._items.forEach(item => {
-			if (item.isPlayed) {
-				item.isPlayed = false;
-			}
-		});
+		this._items.forEach(item => item.isPlayed = false);
 		this.onUpdate();
 	}
 	removeNonActiveItem() {
 		const beforeLen = this._items.length;
-		this._items = this._items.filter(item => {
-			return item.isActive;
-		});
+		this._items = this._items.filter(item => item.isActive);
 		const afterLen = this._items.length;
 		if (beforeLen !== afterLen) {
 			this.emit('update', this._items);
@@ -19310,9 +19877,7 @@ class VideoListModel extends Emitter {
 	}
 	findByItemId(itemId) {
 		itemId = parseInt(itemId, 10);
-		const item = this._items.find(item => {
-			return item.itemId === itemId;
-		});
+		const item = this._items.find(item => item.itemId === itemId);
 		if (item && !this._boundSet.has(item)) {
 			this._boundSet.add(item);
 			item.on('update', this._boundOnItemUpdate);
@@ -19321,9 +19886,7 @@ class VideoListModel extends Emitter {
 	}
 	findByWatchId(watchId) {
 		watchId = watchId + '';
-		const item = this._items.find(item => {
-			return item.watchId === watchId;
-		});
+		const item = this._items.find(item => item.watchId === watchId);
 		if (item && !this._boundSet.has(item)) {
 			this._boundSet.add(item);
 			item.on('update', this._boundOnItemUpdate);
@@ -19353,7 +19916,7 @@ class VideoListModel extends Emitter {
 		}
 	}
 	uniq(item) {
-		this._items.forEach((i) => {
+		this._items.forEach(i => {
 			if (i === item) {
 				return;
 			}
@@ -19367,10 +19930,7 @@ class VideoListModel extends Emitter {
 		return this._items.map(item => item.serialize());
 	}
 	unserialize(itemDataList) {
-		const items = [];
-		itemDataList.forEach(itemData => {
-			items.push(new VideoListItem(itemData));
-		});
+		const items = itemDataList.map(itemData => new VideoListItem(itemData));
 		this.setItem(items);
 	}
 	sortBy(key, isDesc) {
@@ -19751,6 +20311,7 @@ const VideoListItemView = (() => {
 			deflistAdd.dataset.param = watchId;
 			pocketInfo.dataset.param = watchId;
 			this._view = template.clone();
+			this.classList = ClassList(this._view);
 		}
 		rebuild(item) {
 			this._isLazy = false;
@@ -19798,7 +20359,7 @@ const VideoListItemView = (() => {
 			if (!this._view) {
 				this.build();
 			}
-			this._view.classList.toggle(className, v);
+			this.classList.toggle(className, v);
 		}
 	}
 	VideoListItemView.CSS = CSS;
@@ -19835,7 +20396,7 @@ class VideoListView extends Emitter {
 		this._initializeView(params);
 	}
 	_initializeView(params) {
-		let html = VideoListView.__tpl__.replace('%CSS%', this._itemCss);
+		const html = VideoListView.__tpl__.replace('%CSS%', this._itemCss);
 		this._frame = new FrameLayer({
 			container: params.container,
 			html: html,
@@ -19852,7 +20413,7 @@ class VideoListView extends Emitter {
 		cssUtil.registerProps(
 			{name: '--list-length',  syntax: '<integer>', initialValue: 1, inherits: true, window: w},
 			{name: '--active-index', syntax: '<integer>', initialValue: 1, inherits: true, window: w},
-			{name: '--progress', syntax: '<length-percentage>', initialValue: cssUtil.px(0), inherits: true, window: w},
+			{name: '--progress', syntax: '<length-percentage>', initialValue: cssUtil.percent(0), inherits: true, window: w},
 		);
 		const container = this._container = doc.querySelector('#listContainer');
 		const list = this._list = doc.getElementById('listContainerInner');
@@ -19862,23 +20423,24 @@ class VideoListView extends Emitter {
 			this._documentFragment = null;
 		}
 		$body.on('click', this._onClick.bind(this))
-			.on('keydown', e => ZenzaWatch.emitter.emit('keydown', e))
-			.on('keyup', e => ZenzaWatch.emitter.emit('keyup', e));
+			.on('keydown', e => global.emitter.emit('keydown', e))
+			.on('keyup', e => global.emitter.emit('keyup', e));
 		w.addEventListener('focus', () => this._hasFocus = true);
 		w.addEventListener('blur', () => this._hasFocus = false);
 		this._updateCSSVars();
 		if (this._dragdrop) {
 			$body.on('mousedown', this._onBodyMouseDown.bind(this), {passive: true});
 		}
+		const ccl = ClassList(container);
 		const onScroll = () => {
-		if (!container.classList.contains('is-scrolling')) {
-			container.classList.add('is-scrolling');
+		if (!ccl.contains('is-scrolling')) {
+			ccl.add('is-scrolling');
 		}
 		onScrollEnd();
 		};
 		const onScrollEnd = _.debounce(() => {
-		if (container.classList.contains('is-scrolling')) {
-			container.classList.remove('is-scrolling');
+		if (ccl.contains('is-scrolling')) {
+			ccl.remove('is-scrolling');
 		}
 		}, 500);
 		container.addEventListener('scroll', onScroll, {passive: true});
@@ -19889,9 +20451,10 @@ class VideoListView extends Emitter {
 				.on('dragleave', this._onBodyDragLeaveFile.bind(this))
 				.on('drop', this._onBodyDropFile.bind(this));
 		}
-		MylistPocketDetector.detect().then(pocket => {
+		MylistPocketDetector.detect().then(async pocket => {
 			this._pocket = pocket;
-			$body.addClass('is-pocketReady');
+			await sleep.idle;
+			$body.raf.addClass('is-pocketReady');
 			if (pocket.external.observe && this._enablePocketWatch) {
 				pocket.external.observe({
 					query: 'a.videoLink',
@@ -19902,7 +20465,7 @@ class VideoListView extends Emitter {
 		});
 	}
 	_onBodyMouseDown(e) {
-		let item = e.target.closest('.videoItem');
+		const item = e.target.closest('.videoItem');
 		if (!item) {
 			return;
 		}
@@ -19937,18 +20500,18 @@ class VideoListView extends Emitter {
 		if (!this._dragging) {
 			return;
 		}
-		let x = e.pageX - this._dragOffset.x;
-		let y = e.pageY - this._dragOffset.y + (this.scrollTop() - this._dragOffset.st);
-		let translate = `translate(${x}px, ${y}px)`;
+		const x = e.pageX - this._dragOffset.x;
+		const y = e.pageY - this._dragOffset.y + (this.scrollTop() - this._dragOffset.st);
+		const translate = `translate(${x}px, ${y}px)`;
 		if (x * x + y * y < 100) {
 			return;
 		}
-		this._$body.addClass('dragging');
+		this._$body.raf.addClass('dragging');
 		util.$(this._dragging)
-			.addClass('dragging')
-			.css('transform', translate);
+			.raf.addClass('dragging')
+			.raf.css('transform', translate);
 		this._$body.find('.dragover').removeClass('dragover');
-		let target = e.target.closest('.videoItem');
+		const target = e.target.closest('.videoItem');
 		if (!target) {
 			return;
 		}
@@ -19957,16 +20520,16 @@ class VideoListView extends Emitter {
 	}
 	_onBodyMouseUp(e) {
 		this._unbindDragStartEvents();
-		let dragging = this._dragging;
+		const dragging = this._dragging;
 		this._endBodyMouseDragging();
 		if (!dragging) {
 			return;
 		}
-		let target = e.target.closest('.videoItem') || this._dragTarget;
+		const target = e.target.closest('.videoItem') || this._dragTarget;
 		if (!target) {
 			return;
 		}
-		let srcId = dragging.dataset.itemId, destId = target.dataset.itemId;
+		const srcId = dragging.dataset.itemId, destId = target.dataset.itemId;
 		if (srcId === destId) {
 			return;
 		}
@@ -19982,7 +20545,7 @@ class VideoListView extends Emitter {
 	}
 	_endBodyMouseDragging() {
 		this._unbindDragStartEvents();
-		this._$body.removeClass('dragging');
+		this._$body.raf.removeClass('dragging');
 		this._dragTarget = null;
 		this._$body.find('.dragover').removeClass('dragover');
 		if (this._dragging) {
@@ -19993,27 +20556,27 @@ class VideoListView extends Emitter {
 	_onBodyDragOverFile(e) {
 		e.preventDefault();
 		e.stopPropagation();
-		this._$body.addClass('drag-over');
+		this._$body.raf.addClass('drag-over');
 	}
 	_onBodyDragEnterFile(e) {
 		e.preventDefault();
 		e.stopPropagation();
-		this._$body.addClass('drag-over');
+		this._$body.raf.addClass('drag-over');
 	}
 	_onBodyDragLeaveFile(e) {
 		e.preventDefault();
 		e.stopPropagation();
-		this._$body.removeClass('drag-over');
+		this._$body.raf.removeClass('drag-over');
 	}
 	_onBodyDropFile(e) {
 		e.preventDefault();
 		e.stopPropagation();
-		this._$body.removeClass('drag-over');
-		let file = e.originalEvent.dataTransfer.files[0];
+		this._$body.raf.removeClass('drag-over');
+		const file = e.originalEvent.dataTransfer.files[0];
 		if (!/\.playlist\.json$/.test(file.name)) {
 			return;
 		}
-		let fileReader = new FileReader();
+		const fileReader = new FileReader();
 		fileReader.onload = ev => {
 			window.console.log('file data: ', ev.target.result);
 			this.emit('filedrop', ev.target.result, file.name);
@@ -20049,7 +20612,7 @@ class VideoListView extends Emitter {
 			f.append(...itemViews.map(i => i.getViewElement()));
 			if (this._list) {
 				this._list.textContent = '';
-				this._list.appendChild(f);
+				this._list.append(f);
 				this._documentFragment = null;
 				this._setInviewObserver();
 			} else {
@@ -20076,10 +20639,10 @@ class VideoListView extends Emitter {
 		if (this._intersectionObserver) {
 			this._intersectionObserver.disconnect();
 		}
-		let images = [...this._document.querySelectorAll('.lazy-load')];
+		const images = [...this._document.querySelectorAll('.lazy-load')];
 		if (!images.length) { return; }
-		let onInview = this._onImageInview_bind || this._onImageInview.bind(this);
-		let observer = this._intersectionObserver = new window.IntersectionObserver(onInview);
+		const onInview = this._onImageInview_bind || this._onImageInview.bind(this);
+		const observer = this._intersectionObserver = new IntersectionObserver(onInview);
 		images.forEach(img => observer.observe(img));
 	}
 	_onImageInview(entries) {
@@ -20092,7 +20655,7 @@ class VideoListView extends Emitter {
 			if (!src) {
 				return;
 			}
-			thumbnail.style.backgroundImage = `url(${src})`;
+			uq(thumbnail).raf.css('backgroundImage', `url(${src})`);
 		});
 	}
 	_onModelItemUpdate(item, key, value) {
@@ -20125,24 +20688,25 @@ class VideoListView extends Emitter {
 		}
 	}
 	_updateCSSVars() {
-		if (this._document) {
-			const body = this._document.body;
-			body.style.setProperty('--list-length', cssUtil.number(this._model.length));
-			body.style.setProperty('--active-index', cssUtil.number(this._model.activeIndex));
-		}
+		if (!this._document) { return; }
+		const body = this._document.body;
+		cssUtil.setProps(
+			[body, '--list-length', cssUtil.number(this._model.length)],
+			[body, '--active-index', cssUtil.number(this._model.activeIndex)]
+		);
 	}
 	_onClick(e) {
 		e.stopPropagation();
-		ZenzaWatch.emitter.emitAsync('hideHover');
-		let target = e.target.closest('.command');
-		let item = e.target.closest('.videoItem');
+		global.emitter.emitAsync('hideHover');
+		const target = e.target.closest('.command');
+		const item = e.target.closest('.videoItem');
 		if (!target) {
 			return;
 		}
 		e.stopPropagation();
 		e.preventDefault();
-		let {command, param} = target.dataset;
-		let {itemId} = item ? item.dataset : {};
+		const {command, param} = target.dataset;
+		const {itemId} = item ? item.dataset : {};
 		switch (command) {
 			case 'deflistAdd':
 				this.emit('deflistAdd', param, itemId);
@@ -20174,7 +20738,7 @@ class VideoListView extends Emitter {
 		if (!this._$body) {
 			return;
 		}
-		this._$body.toggleClass(className, v);
+		ClassList(this._$body[0]).toggle(className, v);
 	}
 	scrollTop(v) {
 		if (!this._container) {
@@ -20193,7 +20757,7 @@ class VideoListView extends Emitter {
 		if (typeof itemId === 'object') {
 			itemId = itemId.itemId;
 		}
-		let $target = this._$body.find(`.item${itemId}`);
+		const $target = this._$body.find(`.item${itemId}`);
 		if (!$target.length) {
 			return;
 		}
@@ -20270,7 +20834,7 @@ VideoListView.__tpl__ = (`
 		border-radius: 0;
 		bottom: auto;
 		right: 0;
-		transform: translateY(calc(var(--progress) * -1%));
+		transform: translateY(calc(var(--progress) * -1));
 		background: none;
 		opacity: 0.5;
 		color: #f99;
@@ -20597,13 +21161,8 @@ class RelatedVideoList extends VideoList {
 			this._initializeView();
 		}
 		this._watchId = watchId;
-		let items = [];
-		listData.forEach(itemData => {
-			if (!itemData.id) {
-				return;
-			}
-			items.push(new VideoListItem(itemData));
-		});
+		const items = listData
+			.filter(itemData => itemData.id).map(itemData => new VideoListItem(itemData));
 		if (!items.length) {
 			return;
 		}
@@ -20629,7 +21188,8 @@ class PlaylistView extends Emitter {
 		this._model = params.model;
 		this._playlist = params.playlist;
 		util.addStyle(PlaylistView.__css__);
-		let $view = this._$view = util.$.html(PlaylistView.__tpl__);
+		const $view = this._$view = util.$.html(PlaylistView.__tpl__);
+		this.classList = ClassList($view[0]);
 		this._container.append($view[0]);
 		const mq = $view.mapQuery({
 			_index: '.playlist-index', _length: '.playlist-length',
@@ -20640,7 +21200,7 @@ class PlaylistView extends Emitter {
 		Object.assign(this, mq.e);
 		Object.assign(this, mq.$);
 		global.debug.playlistView = this._$view;
-		let listView = this._listView = new VideoListView({
+		const listView = this._listView = new VideoListView({
 			container: this._playlistFrame,
 			model: this._model,
 			className: 'playlist',
@@ -20655,9 +21215,9 @@ class PlaylistView extends Emitter {
 		this._playlist.on('update',
 			_.debounce(this._onPlaylistStatusUpdate.bind(this), 100));
 		this._$view.on('click', this._onPlaylistCommandClick.bind(this));
-		ZenzaWatch.emitter.on('hideHover', () => {
-			this._$menu.removeClass('show');
-			this._$fileDrop.removeClass('show');
+		global.emitter.on('hideHover', () => {
+			this._$menu.raf.removeClass('show');
+			this._$fileDrop.raf.removeClass('show');
 		});
 		util.$('.zenzaVideoPlayerDialog')
 			.on('dragover', this._onDragOverFile.bind(this))
@@ -20672,8 +21232,7 @@ class PlaylistView extends Emitter {
 		].forEach(func => this[func] = listView[func].bind(listView));
 	}
 	toggleClass(className, v) {
-		this._view.toggleClass(className, v);
-		this._$view.toggleClass(className, v);
+		this.classList.toggle(className, v);
 	}
 	_onCommand(command, param, itemId) {
 		switch (command) {
@@ -20686,29 +21245,29 @@ class PlaylistView extends Emitter {
 		this.emit('deflistAdd', watchId, itemId);
 	}
 	_onPlaylistCommandClick(e) {
-		let target = e.target.closest('.playlist-command');
+		const target = e.target.closest('.playlist-command');
 		if (!target) {
 			return;
 		}
-		let {command, param} = target.dataset;
+		const {command, param} = target.dataset;
 		e.stopPropagation();
 		if (!command) {
 			return;
 		}
 		switch (command) {
 			case 'importFileMenu':
-				this._$menu.removeClass('show');
+				this._$menu.raf.removeClass('show');
 				this._$fileDrop.addClass('show');
 				return;
 			case 'toggleMenu':
 				e.stopPropagation();
 				e.preventDefault();
-				this._$menu.addClass('show');
+				this._$menu.raf.addClass('show');
 				return;
 			case 'shuffle':
 			case 'sortBy':
-				this._$view.addClass('shuffle');
-				window.setTimeout(() => this._$view.removeClass('shuffle'), 1000);
+				this.classList.add('shuffle');
+				window.setTimeout(() => this.classList.remove('shuffle'), 1000);
 				this.emit('command', command, param);
 				break;
 			default:
@@ -20718,9 +21277,8 @@ class PlaylistView extends Emitter {
 	}
 	_onPlaylistStatusUpdate() {
 		const playlist = this._playlist;
-		this._$view
-			.toggleClass('enable', playlist.isEnable)
-			.toggleClass('loop', playlist.isLoop)
+		this.classList.toggle('enable', playlist.isEnable)
+		this.classList.toggle('loop', playlist.isLoop)
 		;
 		this._index.textContent = playlist.getIndex() + 1;
 		this._length.textContent = playlist.length;
@@ -20996,7 +21554,7 @@ const PlaylistSession = (storage => {
 			}
 		},
 		restore() {
-			let data = storage.getItem(KEY);
+			const data = storage.getItem(KEY);
 			if (!data) {
 				return null;
 			}
@@ -21011,15 +21569,15 @@ const PlaylistSession = (storage => {
 })(sessionStorage);
 class Playlist extends VideoList {
 	initialize(params) {
-		this._thumbInfoLoader = params.loader || ZenzaWatch.api.ThumbInfoLoader;
+		this._thumbInfoLoader = params.loader || global.api.ThumbInfoLoader;
 		this._container = params.container;
 		this._index = -1;
 		this._isEnable = false;
 		this._isLoop = params.loop;
 		this._model = new PlaylistModel({});
-		ZenzaWatch.debug.playlist = this;
+		global.debug.playlist = this;
 		this.on('update', _.debounce(() => PlaylistSession.save(this.serialize()), 3000));
-		ZenzaWatch.emitter.on('tabChange', tab => {
+		global.emitter.on('tabChange', tab => {
 			if (tab === 'playlist') {
 				this.scrollToActiveItem();
 			}
@@ -21115,16 +21673,16 @@ class Playlist extends VideoList {
 		}
 	}
 	_onExportFileCommand() {
-		let dt = new Date();
-		let title = prompt('プレイリストを保存\nプレイヤーにドロップすると復元されます',
+		const dt = new Date();
+		const title = prompt('プレイリストを保存\nプレイヤーにドロップすると復元されます',
 			util.dateToString(dt) + 'のプレイリスト');
 		if (!title) {
 			return;
 		}
-		let data = JSON.stringify(this.serialize(), null, 2);
-		let blob = new Blob([data], {'type': 'text/html'});
-		let url = window.URL.createObjectURL(blob);
-		let a = document.createElement('a');
+		const data = JSON.stringify(this.serialize(), null, 2);
+		const blob = new Blob([data], {'type': 'text/html'});
+		const url = window.URL.createObjectURL(blob);
+		const a = document.createElement('a');
 		Object.assign(a, {
 			download: title + '.playlist.json',
 			rel: 'noopener',
@@ -21142,8 +21700,8 @@ class Playlist extends VideoList {
 		this.emit('command', 'notify', 'プレイリストを復元');
 		this.unserialize(JSON.parse(fileData));
 		window.setTimeout(() => {
-			let index = Math.max(0, fileData.index || 0);
-			let item = this._model.getItemByIndex(index);
+			const index = Math.max(0, fileData.index || 0);
+			const item = this._model.getItemByIndex(index);
 			if (item) {
 				this.setIndex(index, true);
 				this.emit('command', 'openNow', item.watchId);
@@ -21151,12 +21709,12 @@ class Playlist extends VideoList {
 		}, 2000);
 	}
 	_onMoveItem(srcItemId, destItemId) {
-		let srcItem = this._model.findByItemId(srcItemId);
-		let destItem = this._model.findByItemId(destItemId);
+		const srcItem = this._model.findByItemId(srcItemId);
+		const destItem = this._model.findByItemId(destItemId);
 		if (!srcItem || !destItem) {
 			return;
 		}
-		let destIndex = this._model.indexOf(destItem);
+		const destIndex = this._model.indexOf(destItem);
 		this._model.removeItem(srcItem);
 		this._model.insertItem(srcItem, destIndex);
 		this._refreshIndex();
@@ -21311,7 +21869,7 @@ class Playlist extends VideoList {
 		return this._nicoSearchApiLoader
 			.searchMore(word, options, limit).then(result => {
 				window.console.timeEnd('loadSearchVideos' + word);
-				let items = result.list || [];
+				const items = result.list || [];
 				let videoListItems = items
 					.filter(item => {
 						return (item.item_data &&
@@ -21539,9 +22097,7 @@ class Playlist extends VideoList {
 	removePlayedItem() {
 		this._model.removePlayedItem();
 		this._refreshIndex(true);
-		setTimeout(() => {
-			this._view.scrollToItem(this._activeItem);
-		}, 1000);
+		setTimeout(() => this._view.scrollToItem(this._activeItem), 1000);
 	}
 	removeNonActiveItem() {
 		this._model.removeNonActiveItem();
@@ -21552,8 +22108,8 @@ class Playlist extends VideoList {
 		if (!this.hasNext) {
 			return null;
 		}
-		let index = this.getIndex();
-		let len = this.length;
+		const index = this.getIndex();
+		const len = this.length;
 		if (len < 1) {
 			return null;
 		}
@@ -21567,8 +22123,8 @@ class Playlist extends VideoList {
 		return this._activeItem ? this._activeItem.watchId : null;
 	}
 	selectPrevious() {
-		let index = this.getIndex();
-		let len = this.length;
+		const index = this.getIndex();
+		const len = this.length;
 		if (len < 1) {
 			return null;
 		}
@@ -21614,23 +22170,42 @@ class Playlist extends VideoList {
 
 class ClassListWrapper {
 	constructor(element) {
+		this.applyNow = this.apply.bind(this);
+		this.apply = bounce.raf(this.applyNow);
+		if (element) {
+			this.setElement(element);
+		} else {
+			this._next = new Set;
+			this._last = new Set;
+		}
+	}
+	setElement(element) {
+		if (this._element) {
+			this.applyNow();
+		}
 		this._element = element;
-		this._next = Array.from(element.classList).sort();
-		this._last = this._next;
-		this.apply = bounce.raf(this.apply.bind(this));
+		this._next = new Set(element.classList);
+		this._last = new Set(this._next);
+		return this;
 	}
 	add(...names) {
-		this._next.push(...names.filter(name => !this._next.includes(name)));
+		names = names.map(name => name.trim().split(/\s+/)).flat();
+		for (const name of names) {
+			this._next.add(name);
+		}
 		this.apply();
-		return true;
+		return this;
 	}
 	remove(...names) {
-		this._next = this._next.filter(name => !names.includes(name));
+		names = names.map(name => name.trim().split(/\s+/)).flat();
+		for (const name of names) {
+			this._next.delete(name);
+		}
 		this.apply();
-		return false;
+		return this;
 	}
 	contains(name) {
-		return this._next.includes(name);
+		return this._next.has(name);
 	}
 	toggle(name, v) {
 		if (v !== undefined) {
@@ -21638,21 +22213,37 @@ class ClassListWrapper {
 		} else {
 			v = !this.contains(name);
 		}
-		return v ? this.add(name) : this.remove(name);
+		const names = name.trim().split(/\s+/);
+		v ? this.add(...names) : this.remove(...names);
+		return this;
 	}
 	apply() {
-		const last = this._last.join(',');
-		const next = this._next.sort().join(',');
+		const last = [...this._last].sort().join(',');
+		const next = [...this._next].sort().join(',');
 		if (next === last) { return; }
-		const added   = this._next.filter(name => !this._last.includes(name));
-		const removed = this._last.filter(name => !this._next.includes(name));
-		if (added.length)   { this._element.classList.add(...added); }
-		if (removed.length) { this._element.classList.remove(...removed); }
-		this._next = Array.from(this._element.classList).sort();
-		this._last = this._next.concat();
+		const element = this._element;
+		const added = [], removed = [];
+		for (const name of this._next) {
+			if (!this._last.has(name)) { added.push(name); }
+		}
+		for (const name of this._last) {
+			if (!this._next.has(name)) { removed.push(name); }
+		}
+		if (removed.length) { element.classList.remove(...removed); }
+		if (added.length)   { element.classList.add(...added); }
+		this._last = this._next;
+		this._next = new Set(element.classList);
 		return this;
 	}
 }
+const ClassList = function(element) {
+	if (this.map.has(element)) {
+		return this.map.get(element);
+	}
+	const m = new ClassListWrapper(element);
+	this.map.set(element, m);
+	return m;
+}.bind({map: new WeakMap()});
 class PlayerConfig {
 	static getInstance(config) {
 		if (!PlayerConfig.instance) {
@@ -21826,12 +22417,12 @@ class NicoVideoPlayerDialogView extends Emitter {
 		this._$body = util.$('body, html');
 		const $container = this._$playerContainer = $dialog.find('.zenzaPlayerContainer');
 		const container = $container[0];
-		const classList = this._classList = new ClassListWrapper(container);
+		const classList = this.classList = ClassList(container);
 		container.addEventListener('click', e => {
 			global.emitter.emitAsync('hideHover');
 			if (
 				e.target.classList.contains('touchWrapper') &&
-				config.getValue('enableTogglePlayOnClick') &&
+				config.props.enableTogglePlayOnClick &&
 				!classList.contains('menuOpen')) {
 				onCommand('togglePlay');
 			}
@@ -21845,7 +22436,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 			this._onCommand(e.detail.command, e.detail.param);
 		});
 		container.addEventListener('focusin', e => {
-			let target = (e.path && e.path.length) ? e.path[0] : e.target;
+			const target = (e.path && e.path.length) ? e.path[0] : e.target;
 			if (target.dataset.hasSubmenu) {
 				classList.add('menuOpen');
 			}
@@ -21868,7 +22459,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				if (!e.target || e.target.id !== 'zenzaVideoPlayerDialog') {
 					return;
 				}
-				if (config.getValue('enableDblclickClose')) {
+				if (config.props.enableDblclickClose) {
 					this.emit('command', 'close');
 				}
 			})
@@ -21951,12 +22542,16 @@ class NicoVideoPlayerDialogView extends Emitter {
 	}
 	async _onPaste(e) {
 		const isZen = !!e.target.closest('.zenzaVideoPlayerDialog');
-		window.console.log('onPaste', e.target, isZen);
+		window.console.log('onPaste', {e, isZen});
 		if (!isZen && ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
 			return;
 		}
 		let text;
-		try { text = await navigator.clipboard.readText(); } catch(e) { window.console.warn(e); }
+		try { text = await navigator.clipboard.readText(); }
+		catch(err) {
+			window.console.warn(err, navigator.clipboard);
+			text = e.clipboardData.getData('text/plain');
+		}
 		if (!text) {
 			return;
 		}
@@ -21995,19 +22590,19 @@ class NicoVideoPlayerDialogView extends Emitter {
 		if (!this._state.isOpen) {
 			return;
 		}
-		let $container = this._$playerContainer;
-		let $header = $container.find('.zenzaWatchVideoHeaderPanel');
-		let config = this._playerConfig;
+		const $container = this._$playerContainer;
+		const [header] = $container.find('.zenzaWatchVideoHeaderPanel');
+		const config = this._playerConfig;
 		const update = () => {
-			const w = window.innerWidth, h = window.innerHeight;
+			const w = global.innerWidth, h = global.innerHeight;
 			const vMargin = h - w * this._aspectRatio;
-			const controlBarMode = config.getValue('fullscreenControlBarMode');
+			const controlBarMode = config.props.fullscreenControlBarMode;
 			if (controlBarMode === 'always-hide') {
 				this.toggleClass('showVideoControlBar', false);
 				return;
 			}
-			let videoControlBarHeight = this._varMapper.videoControlBarHeight;
-			let showVideoHeaderPanel = vMargin >= videoControlBarHeight + $header[0].offsetHeight * 2;
+			const videoControlBarHeight = this._varMapper.videoControlBarHeight;
+			const showVideoHeaderPanel = vMargin >= videoControlBarHeight + header.offsetHeight * 2;
 			let showVideoControlBar;
 			switch (controlBarMode) {
 				case 'always-show':
@@ -22143,7 +22738,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 		const table = this._getStateClassNameTable();
 		const state = this._state;
 		for (const [key, className] of table) {
-			this._classList.toggle(className, state[key]);
+			this.classList.toggle(className, state[key]);
 		}
 		if (this._state.isOpen) {
 			this._applyScreenMode();
@@ -22163,14 +22758,13 @@ class NicoVideoPlayerDialogView extends Emitter {
 		const screenMode = `zenzaScreenMode_${this._state.screenMode}`;
 		if (!force && this._lastScreenMode === screenMode) { return; }
 		this._lastScreenMode = screenMode;
-		const body = this._$body;
 		const modes = this._getScreenModeClassNameTable();
 		const isFull = util.fullscreen.now();
 		Object.assign(document.body.dataset, {
 			screenMode: this._state.screenMode,
 			fullscreen: isFull ? 'yes' : 'no'
 		});
-		modes.forEach(m => body.toggleClass(m, m === screenMode && !isFull));
+		modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull));
 		this._updateScreenModeStyle();
 	}
 	_updateScreenModeStyle() {
@@ -22207,25 +22801,25 @@ class NicoVideoPlayerDialogView extends Emitter {
 		util.StyleSwitcher.update({on, off});
 	}
 	show() {
-		this._$dialog.addClass('is-open');
+		ClassList(this._$dialog[0]).add('is-open');
 		if (!Fullscreen.now()) {
-			document.body.classList.remove('fullscreen');
+			ClassList(document.body).remove('fullscreen');
 		}
-		this._$body.addClass('showNicoVideoPlayerDialog');
+		this._$body.raf.addClass('showNicoVideoPlayerDialog');
 		util.StyleSwitcher.update({on: 'style.zenza-open'});
 		this._updateScreenModeStyle();
 	}
 	hide() {
-		this._$dialog.removeClass('is-open');
+		ClassList(this._$dialog[0]).remove('is-open');
 		this._settingPanel.hide();
-		this._$body.removeClass('showNicoVideoPlayerDialog');
+		this._$body.raf.removeClass('showNicoVideoPlayerDialog');
 		util.StyleSwitcher.update({off: 'style.zenza-open, style.screenMode', on: 'link[href*="watch.css"]'});
 		this._clearClass();
 	}
 	_clearClass() {
 		const modes = this._getScreenModeClassNameTable().join(' ');
 		this._lastScreenMode = '';
-		this._$body.removeClass(modes);
+		this._$body.raf.removeClass(modes);
 	}
 	_setThumbnail(thumbnail) {
 		if (thumbnail) {
@@ -22244,23 +22838,23 @@ class NicoVideoPlayerDialogView extends Emitter {
 		return this._$playerContainer;
 	}
 	css(key, val) {
-		this._$playerContainer.css(key, val);
+		this._$playerContainer.raf.css(key, val);
 	}
 	addClass(name) {
-		const cls = name.split(/\s+/).filter(cn => !this._classList.contains(cn));
+		const cls = name.split(/\s+/).filter(cn => !this.classList.contains(cn));
 		if (!cls.length) { return; }
-		return this._classList.add(...cls);
+		return this.classList.add(...cls);
 	}
 	removeClass(name) {
-		const cls = name.split(/\s+/).filter(cn => this._classList.contains(cn));
+		const cls = name.split(/\s+/).filter(cn => this.classList.contains(cn));
 		if (!cls.length) { return; }
-		return this._classList.remove(...cls);
+		return this.classList.remove(...cls);
 	}
 	toggleClass(name, v) {
 		if (typeof v === 'boolean') {
 			return v ? this.addClass(name) : this.removeClass(name);
 		}
-		name.split(/\s+/).forEach(n => this._classList.toggle(n));
+		name.split(/\s+/).forEach(n => this.classList.toggle(n));
 	}
 	hasClass(name) {
 		const container = this._$playerContainer[0];
@@ -22777,8 +23371,6 @@ NicoVideoPlayerDialogView.__css__ = `
 	}
 	`.trim();
 NicoVideoPlayerDialogView.__tpl__ = (`
-<!--
--->
 		<div id="zenzaVideoPlayerDialog" class="zenzaVideoPlayerDialog zen-family zen-root">
 			<div class="zenzaVideoPlayerDialogInner">
 				<div class="menuContainer"></div>
@@ -22789,8 +23381,6 @@ NicoVideoPlayerDialogView.__tpl__ = (`
 				</div>
 			</div>
 		</div>
-<!--
--->
 	`).trim();
 class NicoVideoPlayerDialog extends Emitter {
 	constructor(params) {
@@ -22955,10 +23545,10 @@ class NicoVideoPlayerDialog extends Emitter {
 				break;
 			case 'seek':
 			case 'seekTo':
-				this.currentTime=param * 1;
+				this.currentTime = param * 1;
 				break;
 			case 'seekBy':
-				this.currentTime=this.currentTime + param * 1;
+				this.currentTime = this.currentTime + param * 1;
 				break;
 			case 'seekPrevFrame':
 			case 'seekNextFrame':
@@ -22966,10 +23556,10 @@ class NicoVideoPlayerDialog extends Emitter {
 				this.execCommand('seekBy', command === 'seekNextFrame' ? 1/60 : -1/60);
 				break;
 			case 'seekRelativePercent': {
-				let dur = this._videoInfo.duration;
-				let mv = Math.abs(param.movePerX) > 10 ?
+				const dur = this._videoInfo.duration;
+				const mv = Math.abs(param.movePerX) > 10 ?
 					(param.movePerX / 2) : (param.movePerX / 8);
-				let pos = this.currentTime + (mv * dur / 100);
+				const pos = this.currentTime + (mv * dur / 100);
 				this.currentTime=Math.min(Math.max(0, pos), dur);
 				break;
 			}
@@ -23383,7 +23973,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		global.emitter.emit('commentChange');
 	}
 	_onCommentFilterChange(filter) {
-		let config = this._playerConfig;
+		const config = this._playerConfig;
 		config.setValue('enableFilter', filter.isEnable);
 		config.setValue('wordFilter', filter.wordFilterList);
 		config.setValue('userIdFilter', filter.userIdFilterList);
@@ -23480,7 +24070,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		if (!this._nicoVideoPlayer) {
 			return 0;
 		}
-		let ct = this._nicoVideoPlayer.currentTime * 1;
+		const ct = this._nicoVideoPlayer.currentTime * 1;
 		if (!this._state.isError && ct > 0) {
 			this._lastCurrentTime = ct;
 		}
@@ -23849,7 +24439,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		} else if (this._playlist) {
 			this._playlist.toggleEnable(false);
 		}
-		let isAutoCloseFullScreen =
+		const isAutoCloseFullScreen =
 			this._videoWatchOptions.hasKey('autoCloseFullScreen') ?
 				this._videoWatchOptions.isAutoCloseFullScreen :
 				this._playerConfig.getValue('autoCloseFullScreen');
@@ -23979,8 +24569,8 @@ class NicoVideoPlayerDialog extends Emitter {
 	get isPlaying() {
 		return this._state.isPlaying;
 	}
-	get isPaused() {
-		return this._nicoVideoPlayer ? this._nicoVideoPlayer.isPaused : true;
+	get paused() {
+		return this._nicoVideoPlayer ? this._nicoVideoPlayer.paused : true;
 	}
 	togglePlay() {
 		if (!this._state.isError && this._nicoVideoPlayer) {
@@ -24872,7 +25462,8 @@ class VariablesMapper {
 	shouldUpdate(state, nextState) {
 		return Object.keys(state).some(key => state[key] !== nextState[key]);
 	}
-	setVar(key, value) { this.element.style.setProperty(key, value); }
+	setVar(key, value) {
+		cssUtil.setProps([this.element, key, value]); }
 	update() {
 		const state = this.state;
 		const nextState = this.nextState;
@@ -26671,6 +27262,7 @@ class VideoInfoPanel extends Emitter {
 		this._isInitialized = true;
 		const $view = this._$view = uq.html(VideoInfoPanel.__tpl__);
 		const view = this._view = $view[0];
+		const classList = this.classList = ClassList(view);
 		const $icon = this._$ownerIcon = $view.find('.ownerIcon');
 		this._$ownerName = $view.find('.ownerName');
 		this._$ownerPageLink = $view.find('.ownerPageLink');
@@ -26695,20 +27287,20 @@ class VideoInfoPanel extends Emitter {
 		view.addEventListener('command', this._onCommandEvent.bind(this));
 		view.addEventListener('click', this._onClick.bind(this));
 		view.addEventListener('wheel', e => e.stopPropagation(), {passive: true});
-		$icon.on('load', () => $icon.removeClass('is-loading'));
-		view.classList.add(Fullscreen.now() ? 'is-fullscreen' : 'is-notFullscreen');
+		$icon.on('load', () => $icon.raf.removeClass('is-loading'));
+		classList.add(Fullscreen.now() ? 'is-fullscreen' : 'is-notFullscreen');
 		global.emitter.on('fullscreenStatusChange', isFull => {
-			view.classList.toggle('is-fullscreen', isFull);
-			view.classList.toggle('is-notFullscreen', !isFull);
+			classList.toggle('is-fullscreen', isFull);
+			classList.toggle('is-notFullscreen', !isFull);
 		});
-		view.addEventListener('touchenter', () => view.classList.add('is-slideOpen'), {passive: true});
-		global.emitter.on('hideHover', () => view.classList.remove('is-slideOpen'));
-		css.registerProps(
+		view.addEventListener('touchenter', () => classList.add('is-slideOpen'), {passive: true});
+		global.emitter.on('hideHover', () => classList.remove('is-slideOpen'));
+		cssUtil.registerProps(
 			{name: '--base-description-color', syntax: '<color>', initialValue: '#888', inherits: true}
 		);
 		MylistPocketDetector.detect().then(pocket => {
 			this._pocket = pocket;
-			view.classList.add('is-pocketReady');
+			classList.add('is-pocketReady');
 		});
 		if (window.customElements) {
 			VideoItemObserver.observe({container: this._description});
@@ -26736,11 +27328,11 @@ class VideoInfoPanel extends Emitter {
 			this._seriesList.append(label);
 		}
 		this._updateVideoDescription(videoInfo.description, videoInfo.isChannel);
-		this._$view
-			.removeClass('userVideo channelVideo initializing')
-			.toggleClass('is-community', this._videoInfo.isCommunityVideo)
-			.toggleClass('is-mymemory', this._videoInfo.isMymemory)
-			.addClass(videoInfo.isChannel ? 'channelVideo' : 'userVideo');
+		const classList = this.classList;
+		classList.remove('userVideo', 'channelVideo', 'initializing');
+		classList.toggle('is-community', this._videoInfo.isCommunityVideo);
+		classList.toggle('is-mymemory', this._videoInfo.isMymemory);
+		classList.add(videoInfo.isChannel ? 'channelVideo' : 'userVideo');
 		this._ichibaItemView.clear();
 		this._ichibaItemView.videoId = videoInfo.videoId;
 		this._uaaView.clear();
@@ -26750,8 +27342,8 @@ class VideoInfoPanel extends Emitter {
 	async _updateVideoDescription(html) {
 		this._description.textContent = '';
 		this._zenTubeUrl = null;
-		const watchLink = watchLink => {
-			let videoId = watchLink.textContent.replace('watch/', '');
+		const decorateWatchLink = watchLink => {
+			const videoId = watchLink.textContent.replace('watch/', '');
 			if (
 				!/^(sm|nm|so|)[0-9]+$/.test(videoId) ||
 				!['www.nicovideo.jp'].includes(watchLink.hostname) || !watchLink.pathname.startsWith('/watch/')) {
@@ -26780,7 +27372,7 @@ class VideoInfoPanel extends Emitter {
 			} else {
 				const vitem = document.createElement('zenza-video-item');
 				vitem.dataset.videoId = videoId;
-				watchLink.insertAdjacentElement('afterend', vitem);
+				watchLink.after(vitem);
 				watchLink.classList.remove('watch');
 			}
 		};
@@ -26817,15 +27409,16 @@ class VideoInfoPanel extends Emitter {
 		const $description = uq(`<zenza-video-description>${html}</zenza-video-description>`);
 		for (const a of $description.query('a')) {
 			a.classList.add('noHoverMenu');
-			let href = a.href;
+			const href = a.href;
 			if (a.classList.contains('watch')) {
-				watchLink(a);
+				decorateWatchLink(a);
 			} else if (a.classList.contains('seekTime')) {
 				seekTime(a);
 			} else if (/^mylist\//.test(a.textContent)) {
 				mylistLink(a);
 			} else if (/^https?:\/\/((www\.|)youtube\.com\/watch|youtu\.be)/.test(href)) {
 				youtube(a);
+				this._zenTubeUrl = href;
 			}
 		}
 		for (const e of
@@ -26839,7 +27432,7 @@ class VideoInfoPanel extends Emitter {
 		}
 		this._description.append($description[0]);
 	}
-	_onVideoCanPlay(watchId, videoInfo, options) {
+	async _onVideoCanPlay(watchId, videoInfo, options) {
 		if (!this._relatedVideoList) {
 			this._relatedVideoList = new RelatedVideoList({
 				container: this._$view.find('.relatedVideoContainer')[0]
@@ -26847,36 +27440,36 @@ class VideoInfoPanel extends Emitter {
 			this._relatedVideoList.on('command', this._onCommand.bind(this));
 		}
 		if (this._config.props.autoZenTube && this._zenTubeUrl && !options.isAutoZenTubeDisabled) {
-			window.setTimeout(() => {
+			sleep(100).then(() => {
 				window.console.info('%cAuto ZenTube', this._zenTubeUrl);
 				this.emit('command', 'setVideo', this._zenTubeUrl);
-			}, 100);
-		}
-		const relatedVideo = [VideoListItem.createByVideoInfoModel(videoInfo).serialize()];
-		RecommendAPILoader.load({videoId: videoInfo.videoId}).then(data => {
-			const items = data.items || [];
-			(items || []).forEach(item => {
-				if (item.contentType !== 'video') {
-					return;
-				}
-				const content = item.content;
-				relatedVideo.push({
-					_format: 'recommendApi',
-					_data: item,
-					id: item.id,
-					title: content.title,
-					length_seconds: content.duration,
-					num_res: content.count.comment,
-					mylist_counter: content.count.mylist,
-					view_counter: content.count.view,
-					thumbnail_url: content.thumbnail.url,
-					first_retrieve: content.registeredAt,
-					has_data: true,
-					is_translated: false
-				});
 			});
-			this._relatedVideoList.update(relatedVideo, watchId);
-		});
+		}
+		await sleep.idle();
+		const relatedVideo = [VideoListItem.createByVideoInfoModel(videoInfo).serialize()];
+		const data = await RecommendAPILoader.load({videoId: videoInfo.videoId}).catch(() => ({}));
+		const items = data.items || [];
+		for (const item of items) {
+			if (item.contentType && item.contentType !== 'video') {
+				continue;
+			}
+			const content = item.content;
+			relatedVideo.push({
+				_format: 'recommendApi',
+				_data: item,
+				id: item.id,
+				title: content.title,
+				length_seconds: content.duration,
+				num_res: content.count.comment,
+				mylist_counter: content.count.mylist,
+				view_counter: content.count.view,
+				thumbnail_url: content.thumbnail.url,
+				first_retrieve: content.registeredAt,
+				has_data: true,
+				is_translated: false
+			});
+		}
+		this._relatedVideoList.update(relatedVideo, watchId);
 	}
 	_onVideoCountUpdate(...args) {
 		if (!this._videoHeaderPanel) {
@@ -26937,8 +27530,8 @@ class VideoInfoPanel extends Emitter {
 	}
 	clear() {
 		this._videoHeaderPanel.clear();
-		this._$view.addClass('initializing');
-		this._$ownerIcon.addClass('is-loading');
+		this._$view.raf.addClass('initializing');
+		this._$ownerIcon.raf.addClass('is-loading');
 		this._description.textContent = '';
 	}
 	selectTab(tabName) {
@@ -27653,9 +28246,10 @@ class VideoHeaderPanel extends Emitter {
 			return;
 		}
 		this._isInitialized = true;
-		css.addStyle(VideoHeaderPanel.__css__);
+		cssUtil.addStyle(VideoHeaderPanel.__css__);
 		const $view = this._$view = uq.html(VideoHeaderPanel.__tpl__);
 		const view = $view[0];
+		const classList = this.classList = ClassList(view);
 		this._videoTitle = $view.find('.videoTitle')[0];
 		this._searchForm = new VideoSearchForm({
 			parentNode: view
@@ -27669,15 +28263,15 @@ class VideoHeaderPanel extends Emitter {
 			parentNode: view.querySelector('.relatedInfoMenuContainer'),
 			isHeader: true
 		});
-		this._relatedInfoMenu.on('open', () => $view.addClass('is-relatedMenuOpen'));
-		this._relatedInfoMenu.on('close', () => $view.removeClass('is-relatedMenuOpen'));
+		this._relatedInfoMenu.on('open', () => classList.add('is-relatedMenuOpen'));
+		this._relatedInfoMenu.on('close', () => classList.remove('is-relatedMenuOpen'));
 		this._videoMetaInfo = new VideoMetaInfo({
 			parentNode: view.querySelector('.videoMetaInfoContainer'),
 		});
-		view.classList.add(Fullscreen.now() ? 'is-fullscreen' : 'is-notFullscreen');
+		classList.add(Fullscreen.now() ? 'is-fullscreen' : 'is-notFullscreen');
 		global.emitter.on('fullScreenStatusChange', isFull => {
-			view.classList.toggle('is-fullscreen', isFull);
-			view.classList.toggle('is-notFullscreen', !isFull);
+			classList.toggle('is-fullscreen', isFull);
+			classList.toggle('is-notFullscreen', !isFull);
 		});
 		window.addEventListener('resize', _.debounce(this._onResize.bind(this), 500));
 	}
@@ -27694,13 +28288,13 @@ class VideoHeaderPanel extends Emitter {
 			watchAuthKey: videoInfo.watchAuthKey
 		});
 		this._relatedInfoMenu.update(videoInfo);
-		this._$view
-			.removeClass('userVideo channelVideo initializing')
-			.toggleClass('is-community', this._videoInfo.isCommunityVideo)
-			.toggleClass('is-mymemory', this._videoInfo.isMymemory)
-			.toggleClass('has-Parent', this._videoInfo.hasParentVideo)
-			.addClass(videoInfo.isChannel ? 'channelVideo' : 'userVideo')
-			.css('display', '');
+		const classList = this.classList;
+		classList.remove('userVideo', 'channelVideo', 'initializing');
+		classList.toggle('is-community', this._videoInfo.isCommunityVideo);
+		classList.toggle('is-mymemory', this._videoInfo.isMymemory);
+		classList.toggle('has-Parent', this._videoInfo.hasParentVideo);
+		classList.add(videoInfo.isChannel ? 'channelVideo' : 'userVideo');
+		this._$view.raf.css('display', '');
 		if (videoInfo.series && videoInfo.series.thumbnailUrl) {
 			this._seriesCover.style.backgroundImage = `url("${videoInfo.series.thumbnailUrl}")`;
 		} else {
@@ -27714,10 +28308,10 @@ class VideoHeaderPanel extends Emitter {
 	_onResize() {
 		const view = this._$view[0];
 		const rect = view.getBoundingClientRect();
-		const isOnscreen = view.classList.contains('is-onscreen');
+		const isOnscreen = this.classList.contains('is-onscreen');
 		const height = rect.bottom - rect.top;
 		const top = isOnscreen ? (rect.top - height) : rect.top;
-		view.classList.toggle('is-onscreen', top < -32);
+		this.classList.toggle('is-onscreen', top < -32);
 	}
 	appendTo(node) {
 		this._initializeDom();
@@ -27727,7 +28321,7 @@ class VideoHeaderPanel extends Emitter {
 		if (!this._$view) {
 			return;
 		}
-		this._$view.removeClass('show');
+		this.classList.remove('show');
 	}
 	close() {
 	}
@@ -27735,7 +28329,7 @@ class VideoHeaderPanel extends Emitter {
 		if (!this._$view) {
 			return;
 		}
-		this._$view.addClass('initializing');
+		this.classList.add('initializing');
 		this._videoTitle.textContent = '';
 	}
 	getPublicStatusDom() {
@@ -27988,11 +28582,10 @@ class VideoSearchForm extends Emitter {
 	_initDom({parentNode}) {
 		let tpl = document.getElementById('zenzaVideoSearchPanelTemplate');
 		if (!tpl) {
-			css.addStyle(VideoSearchForm.__css__);
+			cssUtil.addStyle(VideoSearchForm.__css__);
 			tpl = document.createElement('template');
 			tpl.innerHTML = VideoSearchForm.__tpl__;
 			tpl.id = 'zenzaVideoSearchPanelTemplate';
-			document.body.appendChild(tpl);
 		}
 		const view = document.importNode(tpl.content, true);
 		this._view = view.querySelector('*');
@@ -28004,7 +28597,7 @@ class VideoSearchForm extends Emitter {
 		const config = this._config;
 		const form = this._form;
 		form['ownerOnly'].checked = config.props.ownerOnly;
-		let confMode = config.props.mode;
+		const confMode = config.props.mode;
 		if (typeof confMode === 'string' && ['tag', 'keyword'].includes(confMode)) {
 			form['mode'].value = confMode;
 		} else if (typeof confMode === 'boolean') {
@@ -28401,11 +28994,8 @@ class IchibaItemView extends BaseViewComponent {
 			.catch(this._onIchibaLoadFail.bind(this));
 	}
 	clear() {
-		this.removeClass('is-loading');
-		this.removeClass('is-success');
-		this.removeClass('is-fail');
-		this.removeClass('is-empty');
-		this._listContainer.innerHTML = '';
+		this.removeClass('is-loading is-success is-fail is-empty');
+		this._listContainer.textContent = '';
 	}
 	_onIchibaLoad(data) {
 		this.removeClass('is-loading');
@@ -28621,7 +29211,7 @@ class UaaView extends BaseViewComponent {
 		if (!this._elm.body) {
 			return;
 		}
-		this._elm.body.innerHTML = '';
+		this._elm.body.textContent = '';
 	}
 	_onLoad(videoId, result) {
 		if (this._props.videoId !== videoId) {
@@ -28632,7 +29222,7 @@ class UaaView extends BaseViewComponent {
 		if (!data || data.sponsors.length < 1) {
 			return;
 		}
-		const df = document.createDocumentFragment();
+		const df = this.df = this.df || document.createDocumentFragment();
 		const div = document.createElement('div');
 		div.className = 'screenshots';
 		let idx = 0, screenshots = 0;
@@ -28661,7 +29251,7 @@ class UaaView extends BaseViewComponent {
 			df.append(this._createItem(u, idx++));
 		});
 		this._elm.body.innerHTML = '';
-		this._elm.body.appendChild(df);
+		this._elm.body.append(df);
 		this.setState({isExist: true});
 	}
 	_createItem(data, idx) {
@@ -28696,7 +29286,7 @@ class UaaView extends BaseViewComponent {
 				ct.drawImage(screenshot, 0, 0);
 				df.classList.add('has-screenshot');
 				df.classList.remove('clickable', 'other');
-				df.appendChild(cv);
+				df.append(cv);
 			}).catch(() => {});
 		} else if (bgkeyframe) {
 			const sec = parseFloat(bgkeyframe);
@@ -28706,7 +29296,7 @@ class UaaView extends BaseViewComponent {
 		} else {
 			df.classList.add('other');
 		}
-		df.appendChild(contact);
+		df.append(contact);
 		return df;
 	}
 	_onFail(videoId) {
@@ -28915,7 +29505,7 @@ class RelatedInfoMenu extends BaseViewComponent {
 	}
 	_initDom(...args) {
 		super._initDom(...args);
-		this._view.classList.toggle('is-Edge', /edge/i.test(navigator.userAgent));
+		ClassList(this._view).toggle('is-Edge', /edge/i.test(navigator.userAgent));
 		const shadow = this._shadow || this._view;
 		this._elm.body = shadow.querySelector('.RelatedInfoMenuBody');
 		this._elm.summary = shadow.querySelector('summary');
@@ -29915,7 +30505,7 @@ CustomElements.initialize = (() => {
 const TextLabel = (() => {
 	const func = function(self) {
 		const items = {};
-		const getId = function() {return `id-${this.id++}`;}.bind({id: 0});
+		const getId = function() {return `id-${this.id++}${Math.random()}`;}.bind({id: 0});
 		const create = async ({canvas, style}) => {
 			const id = getId();
 			const ctx = canvas.getContext('2d', {
@@ -29999,7 +30589,23 @@ const TextLabel = (() => {
 	};
 	const NAME = 'TextLabelWorker';
 	let worker;
-	const create = async ({container, canvas, ratio, name, style, text}) => {
+	const initWorker = async () => {
+		if (worker) { return worker; }
+		if (!isOffscreenCanvasAvailable) {
+			if (!worker) {
+				worker = {
+					name: NAME,
+					onmessage: () => {},
+					post: ({command, params}) => worker.onmessage({command, params})
+				};
+				func(worker);
+			}
+		} else {
+			worker = worker || workerUtil.createCrossMessageWorker(func, {name: NAME});
+		}
+		return worker;
+	};
+	const create = ({container, canvas, ratio, name, style, text}) => {
 		style = style || {};
 		ratio = Math.max(ratio || window.devicePixelRatio || 2, 2);
 		style.ratio = style.ratio || ratio;
@@ -30020,42 +30626,40 @@ const TextLabel = (() => {
 		style.fontFamily = style.fontFamily || containerStyle.fontFamily;
 		style.fontWeight = style.fontWeight || containerStyle.fontWeight;
 		style.color      = style.color      || containerStyle.color;
-		if (!isOffscreenCanvasAvailable) {
-			if (!worker) {
-				worker = {
-					name: NAME,
-					onmessage: () => {},
-					post: ({command, params}) => worker.onmessage({command, params})
-				};
-				func(worker);
-			}
-		} else {
-			worker = worker || workerUtil.createCrossMessageWorker(func, {name: NAME});
-		}
-		const layer = isOffscreenCanvasAvailable ? canvas.transferControlToOffscreen() : canvas;
-		const init = await worker.post(
-			{command: 'create', params: {canvas: layer, style, name}},
-			{transfer: [layer]}
-		);
-		const id = init.id;
+		const promiseSetup = (async () => {
+			const layer = isOffscreenCanvasAvailable ? canvas.transferControlToOffscreen() : canvas;
+			const worker = await initWorker();
+			const result = await worker.post(
+				{command: 'create', params: {canvas: layer, style, name}},
+				{transfer: [layer]}
+			);
+			return result.id;
+		})();
+		const init = {text};
+		const post = async ({command, params}, transfer = {}) => {
+			const id = await promiseSetup;
+			params = params || {};
+			params.id = id;
+			return worker.post({command, params}, transfer);
+		};
 		const result = {
 			container,
 			canvas,
 			style() {
 				init.text = '';
 				const style = getContainerStyle({container, canvas});
-				return worker.post({command: 'style', params: {id, style, name}});
+				return post({command: 'style', params: {style, name}});
 			},
 			async drawText(text) {
 				if (init.text === text) {
 					return;
 				}
-				const result = await worker.post({command: 'drawText', params: {id, text}});
+				const result = await post({command: 'drawText', params: {text}});
 				init.text = result.text;
 			},
 			get text() { return init.text; },
 			set text(t) { this.drawText(t); },
-			dispose: () => worker.post({command: 'dispose', params: {id}})
+			dispose: () => worker.post({command: 'dispose'})
 		};
 		text && (result.text = text);
 		return result;
@@ -30094,6 +30698,40 @@ ZenzaWatch.modules.TextLabel = TextLabel;
 
   }; // end of monkey
 (() => {
+const dimport = Object.assign(url => {
+	if (dimport.map[url]) {
+		return dimport.map[url];
+	}
+	try {
+		const now = Date.now();
+		const callbackName = `dimport_${now}`;
+		const loader = `
+			import * as module${now} from "${url}";
+			console.log('%cdynamic import from "${url}"',
+				'font-weight: bold; background: #333; color: #ff9; display: block; padding: 4px; width: 100%;');
+			window.${callbackName}(module${now});
+			`.trim();
+		window.console.time(`"${url}" import time`);
+		const p = new Promise((ok, ng) => {
+			const s = document.createElement('script');
+			s.type = 'module';
+			s.onerror = ng;
+			s.append(document.createTextNode(loader));
+			s.dataset.import = url;
+			window[callbackName] = module => {
+				window.console.timeEnd(`"${url}" import time`);
+				ok(module);
+				delete window[callbackName];
+			};
+			document.head.append(s);
+		});
+		dimport.map[url] = p;
+		return p;
+	} catch (e) {
+		console.warn(url, e);
+		return Promise.reject(e);
+	}
+}, {map: {}});
 function EmitterInitFunc() {
 class Handler { //extends Array {
 	constructor(...args) {
@@ -30312,6 +30950,8 @@ const {Emitter} = (() => {
 		hasPromise(name) {
 			return this._promise && !!this._promise[name];
 		}
+		addEventListener(...args) { return this.on(...args); }
+		removeEventListener(...args) { return this.off(...args);}
 	}
 	Emitter.totalCount = totalCount;
 	Emitter.warnings = warnings;
@@ -31091,8 +31731,8 @@ const VideoSessionWorker = (() => {
 			low: /_(360p)$/
 		};
 		const util = {
-			fetch(url, params = {}) {
-				if (!location.origin.endsWith('.nicovideo.jp')) {
+			fetch(url, params = {}) { // ブラウザによっては location.origin は 'blob:' しか入らない
+				if (!location.origin.endsWith('.nicovideo.jp') && !/^blob:https?:\/\/[a-z0-9]+\.nicovideo\.jp\//.test(location.href)) {
 					return self.xFetch(url, params);
 				}
 				const racers = [];
@@ -31703,7 +32343,7 @@ const VideoSessionWorker = (() => {
 })();
 
   window.ZenzaLib = Object.assign(window.ZenzaLib || {}, {
-    workerUtil,
+    workerUtil, dimport,
     IndexedDbStorage, WatchInfoCacheDb,
     Handler, PromiseHandler, Emitter, EmitterInitFunc,
     parseThumbInfo, StoryboardCacheDb, VideoSessionWorker
@@ -31711,7 +32351,7 @@ const VideoSessionWorker = (() => {
 })();
 
 const GateAPI = (() => {
-	const {Handler, PromiseHandler, Emitter, EmitterInitFunc, workerUtil, parseThumbInfo} = window.ZenzaLib || {};
+	const {dimport, Handler, PromiseHandler, Emitter, EmitterInitFunc, workerUtil, parseThumbInfo} = window.ZenzaLib || {};
 const gate = () => {
 	const post = function(body, {type, token, sessionId, origin} = {}) {
 		sessionId = sessionId || '';
@@ -31936,7 +32576,6 @@ const ThumbInfoCacheDb = (() => {
 	};
 	const nicovideo = () => {
 		const {port, type, TOKEN, PID} = init({prefix: `nicovideoApi${PRODUCT}Loader`, type: 'nicovideoApi'});
-		console.log('enable bridge', origin);
 		let isOk = false;
 		const pushHistory = ({path, title = ''}) => {
 			window.history.replaceState(null, title, path);
@@ -31947,6 +32586,7 @@ const ThumbInfoCacheDb = (() => {
 			}
 		};
 		const PREFIX = PRODUCT || 'ZenzaWatch';
+		const kvs = null;
 		const dumpConfig = (params, sessionId) => {
 			if (!params.keys) {
 				return;
@@ -31954,7 +32594,12 @@ const ThumbInfoCacheDb = (() => {
 			const prefix = params.prefix || PREFIX;
 			const config = {};
 			const {keys, command} = params;
-			keys.forEach(key => {
+			keys.forEach(async key => {
+				if (kvs) {
+					const value = await kvs.get(key);
+					(value !== undefined) && (config[key] = value);
+					return;
+				}
 				const storageKey = `${prefix}_${key}`;
 				if (localStorage.hasOwnProperty(storageKey) || localStorage[storageKey] !== undefined) {
 					try {
@@ -31968,6 +32613,10 @@ const ThumbInfoCacheDb = (() => {
 		};
 		const saveConfig = params => {
 			if (!params.key) {
+				return;
+			}
+			if (kvs) {
+				kvs.set(params.key, params.value);
 				return;
 			}
 			const prefix = params.prefix || PREFIX;
@@ -32202,28 +32851,33 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 		const LazyImage = window.Nico && window.Nico.LazyImage;
 		if (!LazyImage) { return; }
 		const isInitialized = !!LazyImage.pageObserver;
-		console.log('override Nico.LazyImage...');
+		console.log('override Nico.LazyImage...', {isInitialized});
 		if (isInitialized) {
 			clearInterval(LazyImage.pageObserver);
 		}
 		Object.assign(LazyImage, {
+			isInitialized: false,
 			waitings: {
 				get length() { return 0; },
 				push(v) { return v; },
 				splice() { return []; }
 			},
 			initialize() {
+				this.isInitialized = true;
 				this._setPageObserver();
 			},
 			reset() {
+				if (this.isInitialized) { return; }
+				console.log('reset and initialize');
+				this.initialize();
 			},
 			enqueue() {
 				if (!this.intersectionObserver) {
 					this.initialize();
 				}
-				const items = document.querySelectorAll(`.${this.className}:not(.is-loading)`);
+				const items = document.querySelectorAll(`.${this.className}:not(.is-lazy-loading)`);
 				for (const item of items) {
-					item.classList.add('is-loading');
+					item.classList.add('is-lazy-loading');
 					this.intersectionObserver.observe(item);
 				}
 			},
@@ -32232,7 +32886,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 					throw new Error('無視していいエラー'); // override前のメソッドから呼ばれたので例外を投げて強制ストップ
 				}
 				const src = item.getAttribute(this.attrName);
-				item.classList.remove(this.className, 'is-loading');
+				item.classList.remove(this.className, 'is-lazy-loading');
 				if (src && item.getAttribute(this.adjustAttrName)) {
 					this._adjustSizeAndLoad(item, src);
 				} else {
