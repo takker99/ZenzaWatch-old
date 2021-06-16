@@ -4,7 +4,7 @@ import {CONSTANT} from './constant';
 import {SeekBarThumbnail, Storyboard} from './StoryBoard';
 import {util, BaseViewComponent} from './util';
 import {Emitter} from './baselib';
-import {bounce} from '../packages/lib/src/infra/bounce';
+import {throttle, bounce} from '../packages/lib/src/infra/bounce';
 import {HeatMapWorker} from '../packages/zenza/src/heatMap/HeatMapWorker';
 import {WatchInfoCacheDb} from '../packages/lib/src/nico/WatchInfoCacheDb';
 import {TextLabel} from '../packages/lib/src/ui/TextLabel';
@@ -12,6 +12,7 @@ import {cssUtil} from '../packages/lib/src/css/css';
 import {RequestAnimationFrame} from '../packages/lib/src/infra/RequestAnimationFrame';
 import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';
 import {VideoControlState} from './State';
+import {WindowResizeObserver} from '../packages/lib/src/infra/Observable';
 //===BEGIN===
 
   class VideoControlBar extends Emitter {
@@ -35,12 +36,14 @@ import {VideoControlState} from './State';
       player.on('loadVideoInfo',  this._onLoadVideoInfo.bind(this));
       player.on('commentParsed',  _.debounce(this._onCommentParsed.bind(this), 500));
       player.on('commentChange',  _.debounce(this._onCommentChange.bind(this), 100));
+      Promise.all([
+        player.promise('firstVideoInitialized'), this.promise('dom-ready')
+      ]).then(() => this._onFirstVideoInitialized());
 
       this._initializeDom();
       this._initializePlaybackRateSelectMenu();
       this._initializeVolumeControl();
       this._initializeVideoServerTypeSelectMenu();
-      this._isFirstVideoInitialized = false;
 
       global.debug.videoControlBar = this;
     }
@@ -63,11 +66,14 @@ import {VideoControlState} from './State';
         _resumePointer: 'zenza-seekbar-label',
         _bufferRange: '.bufferRange',
         _seekRange: '.seekRange',
-        _seekBarPointer: '.seekBarPointer'
+        _seekBarPointer: '.seekBarPointer',
+        resumePointers: 'zenza-seekbar-label',
       });
       Object.assign(this, mq.e, {_currentTime: 0});
       Object.assign(this, mq.$);
-      util.$(this._seekRange).on('input', this._onSeekRangeInput.bind(this));
+      util.$(this._seekRange)
+        .on('input', this._onSeekRangeInput.bind(this))
+        .on('change', e => e.target.blur());
 
       this._pointer = new SmoothSeekBarPointer({
         pointer: this._seekBarPointer,
@@ -164,6 +170,7 @@ import {VideoControlState} from './State';
       });
 
       $container.append($view);
+      this.emitResolve('dom-ready');
     }
     _initializePlaybackRateSelectMenu() {
       const config = this._playerConfig;
@@ -427,26 +434,36 @@ import {VideoControlState} from './State';
       this.duration = videoInfo.duration;
       const [view] = this._$view;
 
-      if (!this._isFirstVideoInitialized) {
-        this._isFirstVideoInitialized = true;
-        const handler = (command, param) => this.emit('command', command, param);
-
-        global.emitter.emitAsync('videoControBar.addonMenuReady',
-          view.querySelector('.controlItemContainer.left .scalingUI'), handler
-        );
-        global.emitter.emitAsync('seekBar.addonMenuReady',
-          view.querySelector('.seekBar'), handler
-        );
-        global.emitter.emitResolve('videoControBar.addonMenuReady',
-          {container: view.querySelector('.controlItemContainer.left .scalingUI'), handler}
-        );
-        global.emitter.emitResolve('seekBar.addonMenuReady',
-          {container: view.querySelector('.seekBar'), handler}
-        );
+      const resumePoints = videoInfo.resumePoints;
+      for (let i = 0, len = this.$resumePointers.length; i < len; i++) {
+        const pointer = this.$resumePointers[i];
+        const resume = resumePoints[i];
+        if (!resume) {
+          pointer.hidden = true;
+          continue;
+        }
+        pointer.setAttribute('duration', videoInfo.duration);
+        pointer.setAttribute('time', resume.time);
+        pointer.setAttribute('text', `${resume.now} ここまで見た`);
+        if (i > 0) {
+          cssUtil.setProps(
+            [pointer, '--pointer-color', 'rgba(128, 128, 255, 0.6)'],
+            [pointer, '--color', '#aef']);
+        } else{
+          cssUtil.setProps([pointer, '--scale-pp', 1.7]);
+        }
       }
-
-      this._resumePointer.setAttribute('duration', videoInfo.duration);
-      this._resumePointer.setAttribute('time', videoInfo.initialPlaybackTime);
+    }
+    async _onFirstVideoInitialized(watchId) {
+      const [view] = this._$view;
+      const handler = (command, param) => this.emit('command', command, param);
+      const ge = global.emitter; // emitAsync は互換用に残してる
+      ge.emitResolve('videoControBar.addonMenuReady',
+        {container: view.querySelector('.controlItemContainer.left .scalingUI'), handler}
+      ).then(({container, handler}) => ge.emitAsync('videoControBar.addonMenuReady', container, handler));
+      ge.emitResolve('seekBar.addonMenuReady',
+        {container: view.querySelector('.seekBar'), handler}
+      ).then(({container, handle}) => ge.emitAsync('seekBar.addonMenuReady', container, handle));
     }
     get currentTime() {
       return this._currentTime;
@@ -528,14 +545,14 @@ util.addStyle(`
     position: fixed;
     bottom: 0;
     left: 0;
-    transform: translate3d(0, 0, 0);
     width: 100vw;
     height: var(--zenza-control-bar-height, ${VideoControlBar.BASE_HEIGHT}px);
     z-index: 150000;
     background: #000;
     transition: opacity 0.3s ease, transform 0.3s ease;
     user-select: none;
-    contain: layout;
+    contain: layout style size;
+    will-change: transform;
   }
 
   .videoControlBar * {
@@ -583,9 +600,6 @@ util.addStyle(`
     left: 50%;
     height: 40px;
     transform: translate(-50%, 0);
-    background:
-      linear-gradient(to bottom,
-      transparent, transparent 4px, #222 0, #222 30px, transparent 0, transparent);
     white-space: nowrap;
     overflow: visible;
     transition: transform 0.2s ease, left 0.2s ease;
@@ -597,6 +611,9 @@ util.addStyle(`
   .controlItemContainer.center .scalingUI > div{
     display: flex;
     align-items: center;
+    background:
+      linear-gradient(to bottom,
+      transparent, transparent 4px, #222 0, #222 30px, transparent 0, transparent);
     height: 32px;
   }
 
@@ -858,19 +875,20 @@ util.addStyle(`
   }
 
   .seekBarPointer {
-    --width-pp: 12px;
-    --trans-x-pp: 0;
+    /*--width-pp: 12px;
+    --trans-x-pp: 0;*/
     position: absolute;
     display: inline-block;
-    top: 50%;
+    top: -1px;
     left: 0;
-    width: var(--width-pp);
+    width: 12px;
     background: rgba(255, 255, 255, 0.7);
     height: calc(100% + 2px);
     z-index: 200;
     box-shadow: 0 0 4px #ffc inset;
     pointer-events: none;
-    transform: translate(calc(var(--trans-x-pp) - var(--width-pp) / 2), -50%);
+    transform: translateX(-6px);
+    /*transform: translate(calc(var(--trans-x-pp) - var(--width-pp) / 2), -50%);*/
     will-change: transform;
     mix-blend-mode: lighten;
   }
@@ -972,6 +990,7 @@ util.addStyle(`
   .resumePointer {
     position: absolute;
     mix-blend-mode: color-dodge;
+    will-change: transform;
     top: 0;
     z-index: 200;
   }
@@ -1490,8 +1509,11 @@ util.addStyle(`
           <input type="range" class="seekRange" min="0" step="any">
           <canvas width="200" height="10" class="heatMap zenzaHeatMap"></canvas>
         </div>
-        <zenza-seekbar-label class="resumePointer" data-command="seekTo" data-text="ここまで見た">
-        </zenza-seekbar-label>
+        <zenza-seekbar-label class="resumePointer" data-command="seekTo" data-text="ここまで見た"></zenza-seekbar-label>
+        <zenza-seekbar-label class="resumePointer" data-command="seekTo" data-text="ここまで見た"></zenza-seekbar-label>
+        <zenza-seekbar-label class="resumePointer" data-command="seekTo" data-text="ここまで見た"></zenza-seekbar-label>
+        <zenza-seekbar-label class="resumePointer" data-command="seekTo" data-text="ここまで見た"></zenza-seekbar-label>
+        <zenza-seekbar-label class="resumePointer" data-command="seekTo" data-text="ここまで見た"></zenza-seekbar-label>
       </div>
 
       <div class="controlItemContainer left">
@@ -1753,7 +1775,7 @@ util.addStyle(`
 
       this._left = 0;
       this.update = _.throttle(this.update.bind(this), 200);
-      this.applyView = bounce.raf(this.applyView.bind(this));
+      this.applyView = throttle.raf(this.applyView.bind(this));
     }
     _initializeDom($parent) {
       cssUtil.registerProps(
@@ -2477,26 +2499,32 @@ util.addStyle(`
       this._currentTime = 0;
       this._duration = 1;
       this._playbackRate = 1;
-      this._isSmoothMode = true;
+      // this._isSmoothMode = (!!this._pointer.animate && 'registerProperty' in CSS);
+      this._isSmoothMode = false;
       this._isPausing = true;
       this._isSeeking = false;
       this._isStalled = false;
-      if (!this._pointer.animate || !('registerProperty' in CSS)) {
-        this._isSmoothMode = false;
-      }
+      this.refresh = throttle.raf(this.refresh.bind(this));
+      this.transformLeft = 0;
+      this.applyTransform = throttle.raf(() => {
+        const per = Math.min(100, this._timeToPer(this._currentTime));
+        this._pointer.style.transform = `translateX(${global.innerWidth * per / 100 - 6}px)`;
+      });
       this._pointer.classList.toggle('is-notSmooth', !this._isSmoothMode);
       params.playerState.onkey('isPausing', v => this.isPausing = v);
       params.playerState.onkey('isSeeking', v => this.isSeeking = v);
       params.playerState.onkey('isStalled', v => this.isStalled = v);
+      if (this._isSmoothMode) {
+        WindowResizeObserver.subscribe(() => this.refresh());
+      }
      }
     get currentTime() {
       return this._currentTime;
     }
     set currentTime(v) {
       if (!this._isSmoothMode) {
-        const per = Math.min(100, this._timeToPer(v));
-        this._pointer.style.transform = `translate3d(${per}vw, 0, 0) translate3d(-50%, -50%, 0)`;
-        return;
+        this._currentTime = v;
+        return this.applyTransform();
       }
       if (document.hidden) { return; }
       if (this._currentTime === v) {
@@ -2574,8 +2602,8 @@ util.addStyle(`
         this._animation.finish();
       }
       this._animation = this._pointer.animate([
-        {'--trans-x-pp': 0},
-        {'--trans-x-pp': cssUtil.vw(100)}
+        {transform: 'translateX(-6px)'},
+        {transform: `translateX(${global.innerWidth - 6}px)`}
       ], {duration: this._duration * 1000, fill: 'backwards'});
       this._animation.currentTime = this._currentTime * 1000;
       this._animation.playbackRate = this._playbackRate;

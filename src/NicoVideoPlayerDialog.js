@@ -2,7 +2,7 @@ import * as $ from 'jquery';
 import * as _ from 'lodash';
 import {global} from './ZenzaWatchIndex';
 import {CONSTANT} from './constant';
-import {PlaybackPosition, VideoInfoLoader, NVWatchCaller} from './loader/api';
+import {PlaybackPosition, VideoInfoLoader, NVWatchCaller} from '../packages/lib/src/nico/loader';
 import {Fullscreen, ShortcutKeyEmitter, util} from './util';
 import {NicoVideoPlayer} from './NicoVideoPlayer';
 import {VideoFilter, VideoInfoModel} from './VideoInfo';
@@ -11,23 +11,25 @@ import {CommentPanel} from './CommentPanel';
 import {VideoControlBar} from './VideoControlBar';
 import {VideoInfoPanel} from './VideoInfoPanel';
 import {SettingPanel} from './SettingPanel';
-import {Playlist, PlaylistSession} from './VideoList';
-import {VideoSession} from './VideoSession';
+import {PlayList, PlayListSession} from '../packages/zenza/src/playlist/PlayList';
 import {Emitter} from './baselib';
 import {ThreadLoader} from './loader/ThreadLoader';
 import {sleep} from '../packages/lib/src/infra/sleep';
 import {VideoSessionWorker} from '../packages/lib/src/nico/VideoSessionWorker';
 import {PlayerState} from './State';
-import {ClassListWrapper, ClassList} from '../packages/lib/src/dom/ClassListWrapper';
+import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';
 import {objUtil} from '../packages/lib/src/infra/objUtil';
-import {reg} from '../packages/lib/src/text/reg';
-import {bounce} from '../packages/lib/src/infra/bounce';
 import {MylistApiLoader} from '../packages/lib/src/nico/MylistApiLoader';
 import {ThumbInfoLoader} from '../packages/lib/src/nico/ThumbInfoLoader';
 import {WatchInfoCacheDb} from '../packages/lib/src/nico/WatchInfoCacheDb';
 import {css, cssUtil} from '../packages/lib/src/css/css';
+import {textUtil} from '../packages/lib/src/text/textUtil';
+import {MediaSessionApi} from '../packages/lib/src/infra/MediaSessionApi';
+import {LikeApi} from '../packages/lib/src/nico/LikeApi.js';
 
 //===BEGIN===
+//@require MediaSessionApi
+//@require LikeApi
 
 class PlayerConfig {
   static getInstance(config) {
@@ -195,7 +197,6 @@ class NicoVideoPlayerDialogView extends Emitter {
     dialog.on('loadVideoInfoFail', this._onVideoInfoFail.bind(this));
     dialog.on('videoServerType', this._onVideoServerType.bind(this));
 
-
     this._initializeDom();
     this._state.on('update', this._onPlayerStateUpdate.bind(this));
     this._state.onkey('videoInfo', this._onVideoInfoLoad.bind(this));
@@ -290,12 +291,12 @@ class NicoVideoPlayerDialogView extends Emitter {
     });
     this.commentInput.on('esc', () => this._escBlockExpiredAt = Date.now() + 1000 * 2);
 
-    this.settingPanel = new SettingPanel({
-      $parent: $container,
-      playerConfig: config,
-      player: this._dialog
-    });
-    this.settingPanel.on('command', onCommand);
+    // this.settingPanel = new SettingPanel({
+    //   $parent: $container,
+    //   playerConfig: config,
+    //   player: this._dialog
+    // });
+    // this.settingPanel.on('command', onCommand);
 
     await sleep.idle();
     this.videoControlBar = new VideoControlBar({
@@ -351,8 +352,9 @@ class NicoVideoPlayerDialogView extends Emitter {
   }
   async _onPaste(e) {
     const isZen = !!e.target.closest('.zenzaVideoPlayerDialog');
-    window.console.log('onPaste', {e, isZen});
-    if (!isZen && ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+    const target = (e.path && e.path[0]) ? e.path[0] : e.target;
+    window.console.log('onPaste', {e, target, isZen});
+    if (!isZen && ['INPUT', 'TEXTAREA'].includes(target.tagName)) {
       return;
     }
     let text;
@@ -510,6 +512,7 @@ class NicoVideoPlayerDialogView extends Emitter {
       isSeeking: 'is-seeking',
       isPausing: 'is-pausing',
 //      isStalled: 'is-stalled',
+      isLiked: 'is-liked',
       isChanging: 'is-changing',
       isUpdatingDeflist: 'is-updatingDeflist',
       isUpdatingMylist: 'is-updatingMylist',
@@ -628,7 +631,7 @@ class NicoVideoPlayerDialogView extends Emitter {
   }
   hide() {
     ClassList(this._$dialog[0]).remove('is-open');
-    this.settingPanel.hide();
+    this.settingPanel && this.settingPanel.close();
     this._$body.raf.removeClass('showNicoVideoPlayerDialog');
     util.StyleSwitcher.update({off: 'style.zenza-open, style.screenMode', on: 'link[href*="watch.css"]'});
     this._clearClass();
@@ -651,6 +654,11 @@ class NicoVideoPlayerDialogView extends Emitter {
     window.setTimeout(() => this.commentInput.focus(), 0);
   }
   toggleSettingPanel() {
+    if (!this.settingPanel) {
+      this.settingPanel = document.createElement('zenza-setting-panel');
+      this.settingPanel.config = this._playerConfig;
+      this._$playerContainer.append(this.settingPanel);
+    }
     this.settingPanel.toggle();
   }
   get$Container() {
@@ -692,6 +700,9 @@ class NicoVideoPlayerDialogView extends Emitter {
 }
 
 util.addStyle(`
+  .is-watch .BaseLayout {
+    display: none;
+  }
   #zenzaVideoPlayerDialog {
     touch-action: manipulation; /* for Safari */
     touch-action: none;
@@ -916,14 +927,6 @@ util.addStyle(`
     contain: style layout paint;
   }
 
-  body.zenzaScreenMode_3D >:not(.zen-family),
-  body.zenzaScreenMode_wide >:not(.zen-family),
-  body.is-fullscreen >:not(.zen-family) {
-    visibility: hidden;
-    pointer-events: none;
-    user-select: none;
-  }
-
   body.zenzaScreenMode_big .ZenButton,
   body.zenzaScreenMode_normal .ZenButton,
   body.zenzaScreenMode_wide .ZenButton,
@@ -1029,7 +1032,7 @@ NicoVideoPlayerDialogView.__css__ = `
   }
   .zenzaPlayerContainer:not(.is-loading):not(.is-error) {
     background-image: none !important;
-    background: #000 !important;
+    background: none !important;
   }
   .zenzaPlayerContainer.is-loading .videoPlayer,
   .zenzaPlayerContainer.is-loading .commentLayerFrame,
@@ -1300,12 +1303,16 @@ class NicoVideoPlayerDialog extends Emitter {
     this._escBlockExpiredAt = -1;
 
     this._videoFilter = new VideoFilter(
-      this._playerConfig.getValue('videoOwnerFilter'),
-      this._playerConfig.getValue('videoTagFilter')
+      this._playerConfig.props.videoOwnerFilter,
+      this._playerConfig.props.videoTagFilter
     );
 
     this._savePlaybackPosition =
       _.throttle(this._savePlaybackPosition.bind(this), 1000, {trailing: false});
+
+    this._onToggleLike = _.debounce(this._onToggleLike.bind(this), 1000);
+
+    this.promise('firstVideoInitialized').then(() => console.nicoru('firstVideoInitialized'));
   }
   async _initializeDom() {
     this._view = new NicoVideoPlayerDialogView({
@@ -1326,6 +1333,7 @@ class NicoVideoPlayerDialog extends Emitter {
         .then(() => e.resolve())
         .catch(() => e.reject());
     });
+    MediaSessionApi.onCommand(this._onCommand.bind(this));
   }
   async _initializeNicoVideoPlayer() {
     if (this._nicoVideoPlayer) {
@@ -1339,12 +1347,6 @@ class NicoVideoPlayerDialog extends Emitter {
       playerState: this._state,
       volume: Math.max(config.props.volume, 0),
       loop: config.props.loop,
-      enableFilter: config.props.enableFilter,
-      wordFilter: config.props.wordFilter,
-      wordRegFilter: config.props.wordRegFilter,
-      wordRegFilterFlags: config.props.wordRegFilterFlags,
-      commandFilter: config.props.commandFilter,
-      userIdFilter: config.props.userIdFilter
     });
 
     this.threadLoader = ThreadLoader;
@@ -1374,6 +1376,7 @@ class NicoVideoPlayerDialog extends Emitter {
     nicoVideoPlayer.on('volumeChange', _.debounce(this._onVolumeChangeEnd.bind(this), 1500));
     nicoVideoPlayer.on('command', this._onCommand.bind(this));
 
+    this.emitResolve('nicovideo-player-ready');
     return nicoVideoPlayer;
   }
   execCommand(command, param) {
@@ -1442,6 +1445,8 @@ class NicoVideoPlayerDialog extends Emitter {
       case 'togglePlaylist':
           this._playlist.toggleEnable();
         break;
+      case 'toggle-like':
+        return this._onToggleLike();
       case 'mylistAdd':
         return this._onMylistAdd(param.mylistId, param.mylistName);
       case 'mylistRemove':
@@ -1514,6 +1519,7 @@ class NicoVideoPlayerDialog extends Emitter {
         break;
       case 'playbackRate':
         this._playerConfig.setValue(command, param);
+        MediaSessionApi.updatePositionStateByMedia(this);
         break;
       case 'shiftUp': {
         v = parseFloat(this._playerConfig.getValue('playbackRate'), 10);
@@ -1573,25 +1579,25 @@ class NicoVideoPlayerDialog extends Emitter {
         });
         break;
       case 'update-smileVideoQuality':
-        this._playerConfig.setValue('videoServerType', 'smile');
-        this._playerConfig.setValue('smileVideoQuality', param);
+        this._playerConfig.props.videoServerType = 'smile';
+        this._playerConfig.props.smileVideoQuality = param;
         this.reload({videoServerType: 'smile', economy: param === 'eco'});
         break;
       case 'update-dmcVideoQuality':
-        this._playerConfig.setValue('videoServerType', 'dmc');
-        this._playerConfig.setValue('dmcVideoQuality', param);
+        this._playerConfig.props.videoServerType = 'dmc';
+        this._playerConfig.props.dmcVideoQuality = param;
         this.reload({videoServerType: 'dmc'});
         break;
       case 'update-videoServerType':
-        this._playerConfig.setValue('videoServerType', param);
+        this._playerConfig.props.videoServerType = param;
         this.reload({videoServerType: param === 'dmc' ? 'dmc' : 'smile'});
         break;
       case 'update-commentLanguage':
         command = command.replace(/^update-/, '');
-        if (this._playerConfig.getValue(command) === param) {
+        if (this._playerConfig.props[command] === param) {
           break;
         }
-        this._playerConfig.setValue(command, param);
+        this._playerConfig.props[command] = param;
         this.reloadComment(param);
         break;
       case 'saveMymemory':
@@ -1609,7 +1615,7 @@ class NicoVideoPlayerDialog extends Emitter {
   }
   _onKeyEvent(name, e, param) {
     if (!this._state.isOpen) {
-      let lastWatchId = this._playerConfig.getValue('lastWatchId');
+      const lastWatchId = this._playerConfig.props.lastWatchId;
       if (name === 'RE_OPEN' && lastWatchId) {
         this.open(lastWatchId);
         e.preventDefault();
@@ -1662,7 +1668,7 @@ class NicoVideoPlayerDialog extends Emitter {
         if (!TABLE[name]) { return; }
         this.execCommand(TABLE[name], param);
     }
-    let screenMode = this._playerConfig.getValue('screenMode');
+    const screenMode = this._playerConfig.props.screenMode;
     if (['small', 'sideView'].includes(screenMode) && ['TOGGLE_PLAY'].includes(name)) {
       return;
     }
@@ -1671,18 +1677,25 @@ class NicoVideoPlayerDialog extends Emitter {
   }
   _onPlayerConfigUpdate(key, value) {
     if (!this._nicoVideoPlayer) { return; }
+    const np = this._nicoVideoPlayer, filter = np.filter;
     switch (key) {
       case 'enableFilter':
-        this._nicoVideoPlayer.filter.isEnable = value;
+        filter.isEnable = value;
         break;
       case 'wordFilter':
-        this._nicoVideoPlayer.filter.wordFilterList = value;
+        filter.wordFilterList = value;
         break;
       case 'userIdFilter':
-        this._nicoVideoPlayer.filter.userIdFilterList = value;
+        filter.userIdFilterList = value;
         break;
       case 'commandFilter':
-        this._nicoVideoPlayer.filter.commandFilterList = value;
+        filter.commandFilterList = value;
+        break;
+      case 'filter.fork0':
+      case 'filter.fork1':
+      case 'filter.fork2':
+      case 'removeNgMatchedUser':
+        filter[key.replace(/^.*\./, '')] = value;
         break;
     }
   }
@@ -1690,15 +1703,12 @@ class NicoVideoPlayerDialog extends Emitter {
     this.emit('screenModeChange', mode);
   }
   _onPlaylistAppend(watchId) {
-    this._initializePlaylist();
     this._playlist.append(watchId);
   }
   _onPlaylistInsert(watchId) {
-    this._initializePlaylist();
     this._playlist.insert(watchId);
   }
   _onPlaylistSetMylist(mylistId, option) {
-    this._initializePlaylist();
 
     option = Object.assign({watchId: this._watchId}, option || {});
     // デフォルトで古い順にする
@@ -1718,7 +1728,6 @@ class NicoVideoPlayerDialog extends Emitter {
       () => this.execCommand('alert', 'マイリストのロード失敗'));
   }
   _onPlaylistSetUploadedVideo(userId, option) {
-    this._initializePlaylist();
     option = Object.assign({watchId: this._watchId}, option || {});
     // 通常時はプレイリストの置き換え、
     // 連続再生中はプレイリストに追加で読み込む
@@ -1732,7 +1741,6 @@ class NicoVideoPlayerDialog extends Emitter {
       err => this.execCommand('alert', err.message || '投稿動画一覧のロード失敗'));
   }
   _onPlaylistSetSearchVideo(params) {
-    this._initializePlaylist();
 
     let option = Object.assign({watchId: this._watchId}, params.option || {});
     let word = params.word;
@@ -1765,7 +1773,6 @@ class NicoVideoPlayerDialog extends Emitter {
       });
   }
   _onPlaylistSetSeriesVideo(id, option = {}) {
-    this._initializePlaylist();
 
     option = Object.assign({watchId: this._watchId}, option || {});
     option.insert = this._playlist.isEnable;
@@ -1844,6 +1851,25 @@ class NicoVideoPlayerDialog extends Emitter {
         timer = window.setTimeout(unlock, 2000);
       });
   }
+  _onToggleLike() {
+    if (!util.isLogin()) { return; }
+    const videoId = this._videoInfo.videoId;
+    const isLiked = this._videoInfo.isLiked;
+    (isLiked ? LikeApi.unlike(videoId) : LikeApi.like(videoId))
+      .then(result => {
+      const message = result.data ? (result.data.thanksMessage || '') : '';
+      if (message) {
+        this.execCommand('notify', `${message}`);
+      } else {
+        this.execCommand('notify',
+          isLiked ? '(･A･)ﾉｼ' : '(･∀･)ｨｨﾈ!!');
+      }
+      this._state.isLiked = this._videoInfo.isLiked = !isLiked;
+    }).catch(err => {
+      console.warn(err);
+      this.execCommand('alert', 'いいね！できなかった');
+    });
+  }
   _onMylistAdd(groupId, mylistName) {
     if (this._state.isUpdatingMylist || !util.isLogin()) {
       return;
@@ -1909,10 +1935,10 @@ class NicoVideoPlayerDialog extends Emitter {
   }
   _onCommentFilterChange(filter) {
     const config = this._playerConfig;
-    config.setValue('enableFilter', filter.isEnable);
-    config.setValue('wordFilter', filter.wordFilterList);
-    config.setValue('userIdFilter', filter.userIdFilterList);
-    config.setValue('commandFilter', filter.commandFilterList);
+    config.props.enableFilter = filter.isEnable;
+    config.props.wordFilter = filter.wordFilterList;
+    config.props.userIdFilter = filter.userIdFilterList;
+    config.props.commandFilter = filter.commandFilterList;
     this.emit('commentFilterChange', filter);
   }
   _onVideoPlayerTypeChange(type = '') {
@@ -1981,20 +2007,18 @@ class NicoVideoPlayerDialog extends Emitter {
 
     this._state.resetVideoLoadingStatus();
 
-    // watchIdからサムネイルを逆算できる時は最速でセットする
-    const thumbnail = util.getThumbnailUrlByVideoId(watchId);
-    this._state.thumbnail = thumbnail;
-
     this._state.isCommentReady = false;
     this._watchId = watchId;
     this._lastCurrentTime = 0;
     this._lastOpenAt = Date.now();
     this._state.isError = false;
 
-    VideoInfoLoader.load(watchId, options.videoLoadOptions).then(
-      this._onVideoInfoLoaderLoad.bind(this, this._requestId)).catch(
-      this._onVideoInfoLoaderFail.bind(this, this._requestId)
-    );
+    Promise.all([
+      VideoInfoLoader.load(watchId, options.videoLoadOptions),
+      WatchInfoCacheDb.get(this._watchId),
+      this._initializePlaylist()  //videoinfo取得に300msくらいかかってるぽいから他のことやろうか
+    ]).then(this._onVideoInfoLoaderLoad.bind(this, this._requestId)
+    ).catch(this._onVideoInfoLoaderFail.bind(this, this._requestId));
 
     this.show();
     if (this._playerConfig.getValue('autoFullScreen') && !util.fullscreen.now()) {
@@ -2002,6 +2026,7 @@ class NicoVideoPlayerDialog extends Emitter {
     }
     this.emit('open', watchId, options);
     global.emitter.emitAsync('DialogPlayerOpen', watchId, options);
+    global.emitter.emitResolve('firstPlayerOpen');
   }
   get isOpen() {
     return this._state.isOpen;
@@ -2031,6 +2056,7 @@ class NicoVideoPlayerDialog extends Emitter {
     sec = Math.max(0, sec);
     this._nicoVideoPlayer.currentTime=sec;
     this._lastCurrentTime = sec;
+    MediaSessionApi.updatePositionStateByMedia(this);
   }
   get id() { return this._id;}
   get isLastOpenedPlayer() {
@@ -2043,12 +2069,12 @@ class NicoVideoPlayerDialog extends Emitter {
     this._playerConfig.props.lastPlayerId = '';
     this._playerConfig.props.lastPlayerId = this.id;
   }
-  async _onVideoInfoLoaderLoad(requestId, videoInfoData) {
+  async _onVideoInfoLoaderLoad(requestId, [videoInfoData, localCacheData]) {
     console.log('VideoInfoLoader.load!', requestId, this._watchId, videoInfoData);
     if (this._requestId !== requestId) {
       return;
     }
-    const videoInfo = this._videoInfo = new VideoInfoModel(videoInfoData);
+    const videoInfo = this._videoInfo = new VideoInfoModel(videoInfoData, localCacheData);
     this._watchId = videoInfo.watchId;
     WatchInfoCacheDb.put(this._watchId, {videoInfo});
     let serverType = 'dmc';
@@ -2058,11 +2084,11 @@ class NicoVideoPlayerDialog extends Emitter {
       serverType = 'dmc';
     } else if (['dmc', 'smile'].includes(this._videoWatchOptions.videoServerType)) {
       serverType = this._videoWatchOptions.videoServerType;
-    } else if (this._playerConfig.getValue('videoServerType') === 'smile') {
+    } else if (this._playerConfig.props.videoServerType === 'smile') {
       serverType = 'smile';
     } else {
       const disableDmc =
-        this._playerConfig.getValue('autoDisableDmc') &&
+        this._playerConfig.props.autoDisableDmc &&
         this._videoWatchOptions.videoServerType !== 'smile' &&
         videoInfo.maybeBetterQualityServerType === 'smile';
       serverType = disableDmc ? 'smile' : 'dmc';
@@ -2072,20 +2098,21 @@ class NicoVideoPlayerDialog extends Emitter {
       isDmcAvailable: videoInfo.isDmcAvailable,
       isCommunity: videoInfo.isCommunityVideo,
       isMymemory: videoInfo.isMymemory,
-      isChannel: videoInfo.isChannel
+      isChannel: videoInfo.isChannel,
+      isLiked: videoInfo.isLiked
     });
+    MediaSessionApi.updateByVideoInfo(this._videoInfo);
 
     const isHLSRequired = videoInfo.dmcInfo && videoInfo.dmcInfo.isHLSRequired;
     const isHLSSupported = !!global.debug.isHLSSupported ||
     document.createElement('video').canPlayType('application/x-mpegURL') !== '';
-    const useHLS = isHLSSupported && (isHLSRequired || !this._playerConfig.getValue('video.hls.enableOnlyRequired'));
-//    this._videoSession = VideoSession.createInstance({
+    const useHLS = isHLSSupported && (isHLSRequired || !this._playerConfig.props['video.hls.enableOnlyRequired']);
       this._videoSession = await VideoSessionWorker.create({
       videoInfo,
-      videoQuality: this._playerConfig.getValue('dmcVideoQuality'),
+      videoQuality: this._playerConfig.props.dmcVideoQuality,
       serverType,
       isPlayingCallback: () => this.isPlaying,
-      useWellKnownPort: this._playerConfig.getValue('useWellKnownPort'),
+      useWellKnownPort: true,
       useHLS
     });
 
@@ -2103,7 +2130,7 @@ class NicoVideoPlayerDialog extends Emitter {
         })
         .catch(this._onVideoSessionFail.bind(this));
     } else {
-      if (this._playerConfig.getValue('enableVideoSession')) {
+      if (this._playerConfig.props.enableVideoSession) {
         this._videoSession.connect();
       }
       videoInfo.setCurrentVideo(videoInfo.videoUrl);
@@ -2116,10 +2143,11 @@ class NicoVideoPlayerDialog extends Emitter {
     this.loadComment(videoInfo.msgInfo);
 
     this.emit('loadVideoInfo', videoInfo);
+    this.emitResolve('firstVideoInitialized', this._watchId);
 
-    if (Fullscreen.now() || this._playerConfig.getValue('screenMode') === 'wide') {
+    if (Fullscreen.now() || this._playerConfig.props.screenMode === 'wide') {
       this.execCommand('notifyHtml',
-        '<img src="' + videoInfo.thumbnail + '" style="width: 96px;">' +
+        `<img src="${textUtil.escapeHtml(videoInfo.thumbnail)}" style="width: 96px;">` +
         util.escapeToZenkaku(videoInfo.title)
       );
     }
@@ -2131,14 +2159,14 @@ class NicoVideoPlayerDialog extends Emitter {
     });
   }
   loadComment(msgInfo) {
-    msgInfo.language = this._playerConfig.getValue('commentLanguage');
+    msgInfo.language = this._playerConfig.props.commentLanguage;
     this.threadLoader.load(msgInfo).then(
       this._onCommentLoadSuccess.bind(this, this._requestId),
       this._onCommentLoadFail.bind(this, this._requestId)
     );
   }
   reloadComment(param = {}) {
-    const msgInfo = this._videoInfo.msgInfo;
+    const msgInfo = Object.assign({}, this._videoInfo.msgInfo);
     if (typeof param.when === 'number') {
       msgInfo.when = param.when;
     }
@@ -2236,7 +2264,12 @@ class NicoVideoPlayerDialog extends Emitter {
     this._state.isCommentReady = true;
     this._state.isWaybackMode = result.threadInfo.isWaybackMode;
     this.emit('commentReady', result, this._threadInfo);
-    this.emit('videoCount', {comment: result.threadInfo.totalResCount});
+    if (result.threadInfo.totalResCount !== this._videoInfo.count.comment) {
+      this._state.count = {
+        ...this._state.count, comment: result.threadInfo.totalResCount
+      };
+      this.emit('videoCount', {comment: result.threadInfo.totalResCount});
+    }
   }
   _onCommentLoadFail(requestId, e) {
     if (requestId !== this._requestId) {
@@ -2256,7 +2289,7 @@ class NicoVideoPlayerDialog extends Emitter {
       this.currentTime=currentTime;
     }
   }
-  _onVideoCanPlay() {
+  async _onVideoCanPlay() {
     if (!this._state.isLoading) {
       return;
     }
@@ -2264,8 +2297,9 @@ class NicoVideoPlayerDialog extends Emitter {
     this._playerConfig.props.lastWatchId = this._watchId;
     WatchInfoCacheDb.put(this._watchId, {watchCount: 1});
 
+    await this.promise('playlist-ready');
+
     if (this._videoWatchOptions.isPlaylistStartRequest) {
-      this._initializePlaylist();
 
       let option = this._videoWatchOptions.mylistLoadOptions;
       let query = this._videoWatchOptions.query;
@@ -2286,25 +2320,21 @@ class NicoVideoPlayerDialog extends Emitter {
         let word = query.tag || query.keyword;
         option.searchType = query.tag ? 'tag' : '';
         option = Object.assign(option, query);
-        this._playlist.loadSearchVideo(word, option, this._playerConfig.getValue('search.limit'));
+        this._playlist.loadSearchVideo(word, option, this._playerConfig.props['search.limit']);
       }
       this._playlist.toggleEnable(true);
-    } else if (PlaylistSession.isExist() && !this._playlist) {
-      this._initializePlaylist();
-      this._playlist.restoreFromSession();
-    } else {
-      this._initializePlaylist();
     }
     // チャンネル動画は、1本の動画がwatchId表記とvideoId表記で2本登録されてしまう。
     // そこでwatchId表記のほうを除去する
     this._playlist.insertCurrentVideo(this._videoInfo);
     if (this._videoInfo.watchId !== this._videoInfo.videoId &&
-      this._videoInfo.videoId.indexOf('so') === 0) {
+      this._videoInfo.videoId.startsWith('so')) {
       this._playlist.removeItemByWatchId(this._videoInfo.watchId);
     }
 
     this._state.setVideoCanPlay();
     this.emitAsync('canPlay', this._watchId, this._videoInfo, this._videoWatchOptions);
+    this.emitResolve('firstVideoCanPlay', this._watchId, this._videoInfo, this._videoWatchOptions);
 
     // プレイリストによって開かれた時は、自動再生設定に関係なく再生する
     if (this._videoWatchOptions.eventType === 'playlist' && this.isOpen) {
@@ -2313,23 +2343,20 @@ class NicoVideoPlayerDialog extends Emitter {
     if (this._nextVideo) {
       const nextVideo = this._nextVideo;
       this._nextVideo = null;
-      if (!this._playlist) {
-        return;
+      if (this._playerConfig.props.enableNicosJumpVideo) {
+        const nv = this._playlist.findByWatchId(nextVideo);
+        if (nv && nv.isPlayed()) {
+          return;
+        } // 既にリストにあって再生済みなら追加しない(無限ループ対策)
+        this.execCommand('notify', '@ジャンプ: ' + nextVideo);
+        this.execCommand('playlistInsert', nextVideo);
       }
-      if (!this._playerConfig.getValue('enableNicosJumpVideo')) {
-        return;
-      }
-      const nv = this._playlist.findByWatchId(nextVideo);
-      if (nv && nv.isPlayed()) {
-        return;
-      } // 既にリストにあって再生済みなら追加しない(無限ループ対策)
-      this.execCommand('notify', '@ジャンプ: ' + nextVideo);
-      this.execCommand('playlistInsert', nextVideo);
     }
 
   }
   _onVideoPlay() {
     this._state.setPlaying();
+    MediaSessionApi.updatePositionStateByMedia(this);
     this.emit('play');
   }
   _onVideoPlaying() {
@@ -2342,6 +2369,7 @@ class NicoVideoPlayerDialog extends Emitter {
   }
   _onVideoSeeked() {
     this._state.isSeeking = false;
+    MediaSessionApi.updatePositionStateByMedia(this);
     this.emit('seeked');
   }
   _onVideoPause() {
@@ -2493,18 +2521,22 @@ class NicoVideoPlayerDialog extends Emitter {
       this._videoSession.close();
     }
   }
-  _initializePlaylist() {
+  async _initializePlaylist() {
     if (this._playlist) {
       return;
     }
-    let $container = this._view.appendTab('playlist', 'プレイリスト');
-    this._playlist = new Playlist({
+    const $container = this._view.appendTab('playlist', 'プレイリスト');
+    this._playlist = new PlayList({
       loader: ThumbInfoLoader,
       container: $container[0],
-      loop: this._playerConfig.getValue('playlistLoop')
+      loop: this._playerConfig.props.playlistLoop
     });
     this._playlist.on('command', this._onCommand.bind(this));
     this._playlist.on('update', _.debounce(this._onPlaylistStatusUpdate.bind(this), 100));
+    if (PlayListSession.isExist()) {
+      this._playlist.restoreFromSession();
+    }
+    this.emitResolve('playlist-ready');
   }
   _initializeCommentPanel() {
     if (this._commentPanel) {
@@ -2514,11 +2546,12 @@ class NicoVideoPlayerDialog extends Emitter {
     this._commentPanel = new CommentPanel({
       player: this,
       $container: $container,
-      autoScroll: this._playerConfig.getValue('enableCommentPanelAutoScroll'),
-      language: this._playerConfig.getValue('commentLanguage')
+      autoScroll: this._playerConfig.props.enableCommentPanelAutoScroll,
+      language: this._playerConfig.props.commentLanguage
     });
     this._commentPanel.on('command', this._onCommand.bind(this));
     this._commentPanel.on('update', _.debounce(this._onCommentPanelStatusUpdate.bind(this), 100));
+    this.emitResolve('commentpanel-ready');
   }
   get isPlaylistEnable() {
     return this._playlist && this._playlist.isEnable;
@@ -2709,7 +2742,6 @@ class VideoHoverMenu {
     $mc.on('mousedown', this._onMouseDown.bind(this));
 
     global.emitter.on('hideHover', this._hideMenu.bind(this));
-    this._initializeNgSettingMenu();
     await this._initializeMylistSelectMenu();
   }
   async _initializeMylistSelectMenu() {
@@ -2758,30 +2790,6 @@ class VideoHoverMenu {
 
     menu.querySelector('.mylistSelectMenuInner').append(ul);
   }
-  _initializeNgSettingMenu() {
-    const state = this._state;
-    const menu = this._container.querySelector('.ngSettingSelectMenu');
-
-    const enableFilterItems = Array.from(menu.querySelectorAll('.update-enableFilter'));
-    const updateEnableFilter = v => {
-      enableFilterItems.forEach(item => {
-        const p = JSON.parse(item.dataset.param);
-        item.classList.toggle('selected', v === p);
-      });
-      menu.classList.toggle('is-enableFilter', v);
-    };
-    updateEnableFilter(state.isEnableFilter);
-    state.onkey('isEnableFilter', updateEnableFilter);
-
-    const sharedNgItems = Array.from(menu.querySelectorAll('.sharedNgLevel'));
-    const updateNgLevel = level => {
-      sharedNgItems.forEach(item => {
-        item.classList.toggle('selected', level === item.getAttribute('data-param'));
-      });
-    };
-    updateNgLevel(state.sharedNgLevel);
-    state.onkey('sharedNgLevel', updateNgLevel);
-  }
   _onMouseDown(e) {
     e.stopPropagation();
     const target = e.target.closest('[data-command]');
@@ -2796,6 +2804,9 @@ class VideoHoverMenu {
         } else {
           command = e.which > 1 ? 'deflistRemove' : 'deflistAdd';
         }
+        util.dispatchCommand(target, command);
+        break;
+      case 'toggle-like':
         util.dispatchCommand(target, command);
         break;
       case 'mylistAdd': {
@@ -2863,6 +2874,11 @@ class VideoHoverMenu {
 }
 
   util.addStyle(`
+    .hoverMenuContainer {
+      user-select: none;
+      contain: style size;
+    }
+
     .menuItemContainer {
       box-sizing: border-box;
       position: absolute;
@@ -2891,7 +2907,7 @@ class VideoHoverMenu {
       }
 
       .menuItemContainer.rightTop {
-        width: 200px;
+        width: 240px;
         height: 40px;
         right: 0px;
         top: 0;
@@ -2998,13 +3014,14 @@ class VideoHoverMenu {
       opacity: 0;
       transition:
         opacity 0.4s ease,
-        box-shadow 0.2s ease,
+        box-shadow 0.2s ease 1s,
         background 0.4s ease;
       box-sizing: border-box;
       text-align: center;
       text-shadow: none;
       user-select: none;
-      will-change: transform;
+      will-change: transform, opacity;
+      contain: style size layout;
     }
       .menuButton:focus-within,
       .menuButton:hover {
@@ -3046,6 +3063,9 @@ class VideoHoverMenu {
         display: none;
       }
 
+      .menuButtonInner {
+        will-change: opacity;
+      }
 
       .menuButton:active .zenzaPopupMenu {
         transform: translate(0, -2px);
@@ -3079,9 +3099,7 @@ class VideoHoverMenu {
         opacity: 0.8;
         background: rgba(80, 80, 80, 0.5);
         border: 1px solid #888;
-        transition:
-          box-shadow 0.2s ease,
-          background 0.4s ease;
+        transition: box-shadow 0.2s ease;
       }
       .is-mouseMoving .menuButton .menuButtonInner {
         opacity: 0.8;
@@ -3116,51 +3134,20 @@ class VideoHoverMenu {
       }
 
 
-    .ngSettingMenu {
-      display: none;
-      left: 80px;
-    }
-      .is-showComment .ngSettingMenu {
-        display: block;
-      }
-      .ngSettingMenu .menuButtonInner {
-        font-size: 18px;
-      }
-
-    .ngSettingSelectMenu {
-      white-space: nowrap;
-      bottom: 0px;
-      left: 32px;
-      font-size: 18px;
-    }
-      .ngSettingMenu:active .ngSettingSelectMenu {
-        transition: none;
-      }
-      .ngSettingSelectMenu .triangle {
-        transform: rotate(45deg);
-        left: -8px;
-        bottom: 3px;
-      }
-      .ngSettingSelectMenu .sharedNgLevelSelect {
-        display: none;
-      }
-
-      .ngSettingSelectMenu.is-enableFilter .sharedNgLevelSelect {
-        display: block;
-      }
-
-
     .menuItemContainer .mylistButton {
       font-size: 21px;
     }
 
     .mylistButton.mylistAddMenu {
-      left: 40px;
+      left: 80px;
       top: 0;
     }
     .mylistButton.deflistAdd {
-      left: 80px;
+      left: 120px;
       top: 0;
+    }
+    .zenzaTweetButton {
+      left: 40px;
     }
 
     @keyframes spinX {
@@ -3222,7 +3209,7 @@ class VideoHoverMenu {
         overflow-y: auto;
         overflow-x: hidden;
         max-height: 50vh;
-        overscroll-behavior: contain;
+        overscroll-behavior: none;
       }
 
       .mylistSelectMenu .triangle {
@@ -3289,6 +3276,51 @@ class VideoHoverMenu {
       }
       .mylistSelectMenu li:hover .name::after {
         color: #fff;
+      }
+
+      .toggleLikeButton {
+        transition:
+        opacity 0.4s ease,
+        box-shadow 0.2s ease 1s,
+        transform 0.2s ease 1s;
+      }
+      .toggleLikeButton:hover {
+        text-shadow: 0 0 2px deeppink;
+        background: none;
+        color: pink;
+      }
+      .is-liked .toggleLikeButton {
+        color: pink;
+      }
+      .toggleLikeButton .liked-heart {
+        display: none;
+      }
+      .is-liked .toggleLikeButton .liked-heart {
+        display: block;
+      }
+      .is-liked .toggleLikeButton .not-liked-heart {
+        display: none;
+      }
+      .toggleLikeButton .heart-effect {
+        position: absolute;
+        left: 50%; top: 50%;
+        transform: translate(-50%, -50%) scale(5);
+        text-shadow: 0 0 3px deeppink;
+        color: #fff;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          transform 0.8s ease,
+          opacity 0.8s ease,
+          visibility 0.8s ease,
+          color 0.8s ease;
+      }
+      .toggleLikeButton:active .heart-effect {
+        transition: none;
+        transform: translate(-50%, -50%) scale(0.3);
+        color: pink;
+        opacity: 0.5;
+        visibility: visible;
       }
 
       .zenzaTweetButton:hover {
@@ -3418,6 +3450,12 @@ VideoHoverMenu.__tpl__ = (`
 
       <div class="menuItemContainer rightTop">
         <div class="scalingUI">
+          <div class="menuButton toggleLikeButton forMember" data-command="toggle-like">
+            <div class="tooltip">いいね！</div>
+            <div class="menuButtonInner"><div class="not-liked-heart"
+              >♡</div><div class="liked-heart"
+              >♥</div><div class="heart-effect">♡</div></div>
+          </div>
           <div class="menuButton zenzaTweetButton" data-command="tweet">
             <div class="tooltip">ツイート</div>
             <div class="menuButtonInner">t</div>
@@ -3451,44 +3489,6 @@ VideoHoverMenu.__tpl__ = (`
           <div class="showCommentSwitch menuButton" data-command="toggle-showComment">
             <div class="tooltip">コメント表示ON/OFF(V)</div>
             <div class="menuButtonInner">💬</div>
-          </div>
-
-          <div class="ngSettingMenu menuButton" data-command="nop"
-            data-has-submenu="1" tabindex="-1">
-            <div class="tooltip">NG設定</div>
-            <div class="menuButtonInner">NG</div>
-
-              <div class="ngSettingSelectMenu selectMenu zenzaPopupMenu">
-                <div class="triangle"></div>
-                <p class="caption">NG設定</p>
-                <ul>
-                  <li class="update-enableFilter"
-                    data-command="update-enableFilter"
-                    data-param="true"  data-type="bool"><span>ON</span></li>
-                  <li class="update-enableFilter"
-                    data-command="update-enableFilter"
-                    data-param="false" data-type="bool"><span>OFF</span></li>
-                </ul>
-                <p class="caption sharedNgLevelSelect">NG共有設定</p>
-                <ul class="sharedNgLevelSelect">
-                  <li class="sharedNgLevel max"
-                    data-command="update-sharedNgLevel"
-                    data-param="MAX"><span>最強</span></li>
-                  <li class="sharedNgLevel high"
-                    data-command="update-sharedNgLevel"
-                    data-param="HIGH"><span>強</span></li>
-                  <li class="sharedNgLevel mid"
-                    data-command="update-sharedNgLevel"
-                    data-param="MID"><span>中</span></li>
-                  <li class="sharedNgLevel low"
-                    data-command="update-sharedNgLevel"
-                    data-param="LOW"><span>弱</span></li>
-                  <li class="sharedNgLevel none"
-                    data-command="update-sharedNgLevel"
-                    data-param="NONE"><span>なし</span></li>
-                </ul>
-              </div>
-
           </div>
         </div>
       </div>
